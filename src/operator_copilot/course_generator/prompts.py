@@ -83,6 +83,19 @@ SOURCE_VERIFICATION_PROMPT = _make_prompt(
     "Restituisci JSON conforme allo schema GroundingCheckLLMOutput.",
 )
 
+CUSTOM_QUIZ_PROMPT = _make_prompt(
+    "Sei il modulo Custom Quiz Generator di Adaptive Learning Engine per operatori PA. "
+    "Genera domande personalizzate a risposta multipla con ESATTAMENTE QUATTRO opzioni (A, B, C, D) e una sola risposta corretta, "
+    "basandoti esclusivamente su <retrieved_context>. "
+    "Adatta le domande al livello stimato dell'utente ({estimated_level}) e alle lacune rilevate ({gaps_summary}), "
+    "formulando varianti diverse dalle domande già somministrate in passato ({previous_questions}).",
+    "Utente: {user_id} | Software: {software} | Modulo: {module_name}\n"
+    "Numero domande richiesto: {num_questions}\n"
+    "Argomenti target: {target_topics}\n\n"
+    "<retrieved_context>\n{context}\n</retrieved_context>\n\n"
+    "Restituisci esclusivamente JSON conforme allo schema CustomQuizGenerationLLM.",
+)
+
 PROMPT_REGISTRY = {
     "extraction": EXTRACTION_PROMPT,
     "classification": CLASSIFICATION_PROMPT,
@@ -92,4 +105,5 @@ PROMPT_REGISTRY = {
     "lesson": LESSON_PROMPT,
     "quiz": QUIZ_PROMPT,
     "source_verification": SOURCE_VERIFICATION_PROMPT,
+    "custom_quiz": CUSTOM_QUIZ_PROMPT,
 }

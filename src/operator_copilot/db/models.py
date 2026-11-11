@@ -473,3 +473,179 @@ class CourseApprovalEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     course: Mapped[Course] = relationship("Course", back_populates="approval_events")
+
+
+# ---------------------------------------------------------------------------
+# Adaptive Learning & Custom Quiz Engine Entities (Milestone 3)
+# ---------------------------------------------------------------------------
+
+
+class CourseQuizAttempt(Base):
+    """Records individual user attempts and errors on traditional course quizzes."""
+
+    __tablename__ = "course_quiz_attempts"
+    __table_args__ = (Index("ix_course_quiz_user", "tenant_id", "user_id", "quiz_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    quiz_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("quizzes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    course_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("courses.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    answers: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
+    wrong_question_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    wrong_topics: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_questions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    percentage: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+
+
+class UserKnowledgeProfile(Base):
+    """Progressive individual knowledge profile per (tenant, user, topic)."""
+
+    __tablename__ = "user_knowledge_profiles"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "topic", name="uq_profile_tenant_user_topic"),
+        Index("ix_profile_user_tenant", "tenant_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    topic: Mapped[str] = mapped_column(String(256), index=True, nullable=False)
+    software: Mapped[str] = mapped_column(String(128), default="Generale", nullable=False)
+    module_name: Mapped[str] = mapped_column(String(128), default="Generale", nullable=False)
+    estimated_level: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    # LACUNA_INDIVIDUATA | APPRENDIMENTO_IN_CORSO | MIGLIORAMENTO_VERIFICATO | COMPETENZA_CONSOLIDATA
+    learning_stage: Mapped[str] = mapped_column(String(48), default="APPRENDIMENTO_IN_CORSO", nullable=False)
+    rag_query_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    troubleshooting_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    verification_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    frequent_questions: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    quiz_errors_summary: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    custom_quiz_history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class LearningGap(Base):
+    """Detected individual user knowledge gap with lifecycle OPEN -> IN_PROGRESS -> IMPROVING -> RESOLVED."""
+
+    __tablename__ = "learning_gaps"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "topic", name="uq_learning_gap_user_topic"),
+        Index("ix_learning_gap_user_status", "tenant_id", "user_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    topic: Mapped[str] = mapped_column(String(256), index=True, nullable=False)
+    software: Mapped[str] = mapped_column(String(128), default="Generale", nullable=False)
+    module_name: Mapped[str] = mapped_column(String(128), default="Generale", nullable=False)
+    evidences: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    evidence_sources: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), default="medium", nullable=False)  # high | medium | low
+    confidence: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    # OPEN | IN_PROGRESS | IMPROVING | RESOLVED
+    status: Mapped[str] = mapped_column(String(24), default="OPEN", index=True, nullable=False)
+    positive_verifications: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    repeated_error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    asked_question_hashes: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CustomQuiz(Base):
+    """Persisted personalized Custom Quiz generated for a specific user."""
+
+    __tablename__ = "custom_quizzes"
+    __table_args__ = (Index("ix_custom_quiz_user_idem", "tenant_id", "user_id", "idempotency_key"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    software: Mapped[str] = mapped_column(String(128), default="Generale", nullable=False)
+    module_name: Mapped[str] = mapped_column(String(128), default="Generale", nullable=False)
+    # GENERATING | READY | COMPLETED | FAILED
+    status: Mapped[str] = mapped_column(String(24), default="READY", index=True, nullable=False)
+    num_questions: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    topics_verified: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    gap_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    model_used: Mapped[str] = mapped_column(String(128), default="deterministic_fallback", nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(64), default="customquiz-v1.0", nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    questions: Mapped[list[CustomQuizQuestion]] = relationship(
+        "CustomQuizQuestion",
+        back_populates="quiz",
+        cascade="all, delete-orphan",
+        order_by="CustomQuizQuestion.order_index",
+    )
+    attempts: Mapped[list[CustomQuizAttempt]] = relationship(
+        "CustomQuizAttempt",
+        back_populates="quiz",
+        cascade="all, delete-orphan",
+        order_by="CustomQuizAttempt.completed_at",
+    )
+
+
+class CustomQuizQuestion(Base):
+    """Individual multiple-choice question (strictly 4 options) linked to real docs & learning gap."""
+
+    __tablename__ = "custom_quiz_questions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    quiz_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("custom_quizzes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    options: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False)  # [{"id": "A", "text": "..."}, ...]
+    correct_option_id: Mapped[str] = mapped_column(String(4), nullable=False)
+    correct_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    topic: Mapped[str] = mapped_column(String(256), index=True, nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(24), default="intermediate", nullable=False)
+    sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    gap_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    quiz: Mapped[CustomQuiz] = relationship("CustomQuiz", back_populates="questions")
+
+
+class CustomQuizAttempt(Base):
+    """Persisted user submission and longitudinal result for a CustomQuiz."""
+
+    __tablename__ = "custom_quiz_attempts"
+    __table_args__ = (Index("ix_cq_attempt_user_date", "tenant_id", "user_id", "completed_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    quiz_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("custom_quizzes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    answers: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_questions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    percentage: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), default="NEEDS_PRACTICE", nullable=False)
+    feedback: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+
+    quiz: Mapped[CustomQuiz] = relationship("CustomQuiz", back_populates="attempts")

@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     pii_redact_before_llm: bool = True
     analysis_max_workers: int = Field(default=2, ge=1, le=8)
 
+    # Adaptive Learning & Custom Quiz Engine (Milestone 3)
+    custom_quiz_prompt_version: str = "customquiz-v1.0"
+    custom_quiz_default_questions: int = Field(default=4, ge=1, le=20)
+    learning_retention_min_hours: float = Field(default=24.0, ge=0.0, le=8760.0)
+    custom_quiz_reuse_hours: int = Field(default=24, ge=1, le=720)
+
     # Embeddings
     embedding_provider: Literal["huggingface", "openai", "hashing"] = "huggingface"
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

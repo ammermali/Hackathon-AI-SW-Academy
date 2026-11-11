@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import secrets
 from typing import Any, Callable
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import joinedload
 
+from operator_copilot.api.dependencies import assert_user_access, build_caller_context_dependency
 from operator_copilot.config.settings import Settings
+from operator_copilot.customquiz import CustomQuizEngine
 from operator_copilot.course_generator.generator import AICourseGenerator
 from operator_copilot.course_generator.grounding_verifier import GroundingVerifier
 from operator_copilot.course_generator.lifecycle import CourseLifecycleManager
@@ -48,6 +49,7 @@ from operator_copilot.schemas.academy import (
     TopicResponse,
     TrainingOpportunityResponse,
 )
+from operator_copilot.schemas.customquiz import CourseQuizSubmitRequest, CourseQuizSubmitResponse
 
 
 def _serialize_course(course: Course) -> CourseResponse:
@@ -159,27 +161,7 @@ def create_academy_router(
 ) -> APIRouter:
     """Create modular APIRouter for Knowledge Intelligence & AI Course Generator."""
     router = APIRouter(prefix="/api/v1/academy", tags=["Knowledge-to-Course Academy"])
-
-    def get_caller_context(
-        x_tenant_id: str = Header(default="default", alias="X-Tenant-ID"),
-        x_user_role: str = Header(default="operatore", alias="X-User-Role"),
-        x_user_id: str = Header(default="anonymous", alias="X-User-ID"),
-        x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
-    ) -> dict[str, str]:
-        role = x_user_role.strip().lower() or "operatore"
-        # Prevent role escalation via X-User-Role=admin without valid X-Admin-Key
-        if role == "admin":
-            expected = settings.admin_api_key.get_secret_value()
-            if not x_admin_key or not secrets.compare_digest(x_admin_key, expected):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ruolo 'admin' richiede un header X-Admin-Key valido.",
-                )
-        return {
-            "tenant_id": x_tenant_id.strip() or "default",
-            "role": role,
-            "user_id": x_user_id.strip() or "anonymous",
-        }
+    get_caller_context = build_caller_context_dependency(settings)
 
     def _services(rag: RAGEngine) -> tuple[KnowledgeJobRunner, AICourseGenerator, GroundingVerifier, CourseLifecycleManager]:
         extractor = KnowledgeExtractor(
@@ -610,6 +592,30 @@ def create_academy_router(
                 for qq in quiz.questions
             ],
         )
+
+    @router.post(
+        "/courses/{course_id}/quizzes/{quiz_id}/submit",
+        response_model=CourseQuizSubmitResponse,
+        summary="Registra le risposte utente su un quiz tradizionale del corso alimentando l'Adaptive Learning",
+    )
+    def submit_course_quiz(
+        course_id: str,
+        quiz_id: str,
+        payload: CourseQuizSubmitRequest,
+        ctx: dict[str, str] = Depends(get_caller_context),
+        rag: RAGEngine = Depends(get_rag_engine),
+    ) -> CourseQuizSubmitResponse:
+        assert_user_access(ctx, payload.user_id)
+        try:
+            return CustomQuizEngine(rag).submit_course_quiz(
+                course_id=course_id,
+                quiz_id=quiz_id,
+                user_id=payload.user_id,
+                answers=payload.answers,
+                tenant_id=ctx["tenant_id"],
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     @router.post(
         "/courses/{course_id}/validate",

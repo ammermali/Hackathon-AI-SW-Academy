@@ -12,7 +12,9 @@ from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.db.database import DatabaseManager, get_db_manager
 from operator_copilot.db.models import (
     CacheEntry,
+    CustomQuiz,
     DocumentMetadata,
+    LearningGap,
     QueryFeedback,
     QueryHistory,
 )
@@ -101,6 +103,9 @@ class MetricsCollector:
             negative_fb = sum(1 for f in feedbacks if f.rating <= 2)
             avg_rating = round(sum(f.rating for f in feedbacks) / fb_count, 2) if fb_count else None
 
+            custom_quizzes_total = db.query(CustomQuiz).count()
+            open_learning_gaps = db.query(LearningGap).filter(LearningGap.status != "RESOLVED").count()
+
         corpus_version = self.db.get_corpus_version()
         last_indexed_at = self.db.get_state("last_indexed_at", default="")
 
@@ -149,14 +154,16 @@ class MetricsCollector:
                 "avg_rating": avg_rating,
             },
             learning_readiness={
-                "milestone_status": "history_collection_only",
+                "milestone_status": "adaptive_learning_and_custom_quiz_enabled",
                 "topics_to_deepen_candidates": [
                     {"topic": t, "query_count": c} for t, c in topic_counter.most_common(5)
                 ],
                 "knowledge_gap_signals": [
                     {"topic": t, "escalation_count": c} for t, c in escalation_topics.most_common(5)
                 ],
-                "quiz_engine_enabled": False,
+                "quiz_engine_enabled": True,
+                "custom_quizzes_generated": custom_quizzes_total,
+                "open_learning_gaps": open_learning_gaps,
             },
         )
 

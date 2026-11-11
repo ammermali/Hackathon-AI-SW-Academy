@@ -96,6 +96,4 @@ python scripts/evaluate_rag.py
 
 ## Documentazione Progetto
 
-- [`docs/DATA_ANALYSIS.md`](docs/DATA_ANALYSIS.md): audit completo dei 1.532 documenti in `data/` e delle criticità rilevate.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): architettura tecnica, flussi, schema DB e decisioni progettuali.
-- [`docs/RAG_EVALUATION.md`](docs/RAG_EVALUATION.md): dataset di valutazione reale, metriche misurate e limiti.

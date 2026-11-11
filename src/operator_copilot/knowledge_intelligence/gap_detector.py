@@ -7,7 +7,6 @@ import unicodedata
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.course_generator.prompts import GAP_DETECTION_PROMPT

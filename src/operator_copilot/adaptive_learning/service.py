@@ -22,7 +22,6 @@ from operator_copilot.db.models import (
     CustomQuiz,
     CustomQuizAttempt,
     LearningGap,
-    Lesson,
     QueryHistory,
     Quiz,
     UserKnowledgeProfile,
@@ -35,7 +34,6 @@ from operator_copilot.schemas.customquiz import (
     CustomQuizResponse,
     CustomQuizResultResponse,
     LearningGapResponse,
-    LearningMetricsResponse,
     QuestionFeedbackItem,
     QuizOptionPublic,
     RecommendedLessonItem,
@@ -175,7 +173,8 @@ class AdaptiveLearningService:
                     correct += 1
                 else:
                     wrong_q_ids.append(qq.id)
-                    topic_label = qq.source_section.split(">")[-1].strip() if qq.source_section else course.title
+                    raw_topic = qq.source_section.split(">")[-1].strip() if qq.source_section else course.title
+                    topic_label = raw_topic.rstrip("?").strip() or course.title
                     if topic_label and topic_label not in wrong_topics:
                         wrong_topics.append(topic_label)
 
@@ -204,6 +203,7 @@ class AdaptiveLearningService:
 
         updated_gaps = self.gap_detector.analyze_user_gaps(user_id, tenant_id=tenant_id)
         self.profiler.refresh_user_profile(user_id, tenant_id=tenant_id)
+        self.db.bump_owner_metrics_version(tenant_id)
         return CourseQuizSubmitResponse(
             attempt_id=attempt_id,
             quiz_id=quiz_id,
@@ -446,6 +446,7 @@ class AdaptiveLearningService:
             db.commit()
 
         self.profiler.refresh_user_profile(user_id, tenant_id=tenant_id)
+        self.db.bump_owner_metrics_version(tenant_id)
         return CustomQuizResultResponse(
             attempt_id=attempt_id,
             quiz_id=quiz_id,
@@ -552,6 +553,7 @@ class AdaptiveLearningService:
             c_course_att = db.query(CourseQuizAttempt).filter_by(tenant_id=tenant_id, user_id=user_id).delete()
             c_hist = db.query(QueryHistory).filter_by(user_id=user_id).delete()
             db.commit()
+        self.db.bump_owner_metrics_version(tenant_id)
         return {
             "custom_quiz_attempts": c_attempts,
             "custom_quizzes": c_quizzes,

@@ -6,7 +6,6 @@ import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.db.database import DatabaseManager, get_db_manager

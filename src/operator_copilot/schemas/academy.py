@@ -305,6 +305,15 @@ class CourseGenerateRequest(BaseModel):
         return _clean_roles_list(v)
 
 
+class CourseUpdateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    summary: str | None = None
+    difficulty: str | None = None
+    allowed_roles: list[str] | None = None
+    change_summary: str = "Modifica manuale metadati corso"
+
+
 class LessonUpdateRequest(BaseModel):
     title: str | None = None
     objective: str | None = None
@@ -413,3 +422,57 @@ class CourseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None = None
+
+
+class LessonCompletionResponse(BaseModel):
+    lesson_id: str
+    course_id: str
+    user_id: str
+    completed: bool = True
+    completed_at: datetime
+
+
+class CourseProgressOverviewItem(BaseModel):
+    course_id: str
+    completed_lessons: int
+    total_lessons: int
+    completion_percentage: float
+    status: Literal["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]
+    best_quiz_percentage: float | None = None
+    last_activity_at: datetime | None = None
+
+
+class CourseQuizAttemptSummaryItem(BaseModel):
+    attempt_id: str
+    quiz_id: str
+    quiz_title: str
+    course_id: str
+    course_title: str
+    lesson_id: str | None = None
+    percentage: float
+    passed: bool
+    wrong_topics: list[str] = Field(default_factory=list)
+    completed_at: datetime
+
+
+class CustomQuizAttemptSummaryItem(BaseModel):
+    attempt_id: str
+    quiz_id: str
+    software: str
+    module_name: str
+    topics_verified: list[str] = Field(default_factory=list)
+    correct_count: int
+    total_questions: int
+    percentage: float
+    outcome: str
+    duration_seconds: int
+    completed_at: datetime
+
+
+class UserLearningOverviewResponse(BaseModel):
+    user_id: str
+    tenant_id: str
+    completed_lesson_ids: list[str] = Field(default_factory=list)
+    course_progress: list[CourseProgressOverviewItem] = Field(default_factory=list)
+    course_quiz_attempts: list[CourseQuizAttemptSummaryItem] = Field(default_factory=list)
+    custom_quiz_attempts: list[CustomQuizAttemptSummaryItem] = Field(default_factory=list)

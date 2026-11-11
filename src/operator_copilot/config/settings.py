@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,7 +51,7 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
     # Vector store
-    vectorstore_type: Literal["chroma", "faiss"] = "chroma"
+    vectorstore_type: Literal["chroma"] = "chroma"
     vectorstore_path: Path = Path("./storage/vectorstore")
     collection_name: str = "operator_copilot_docs"
 
@@ -69,20 +70,56 @@ class Settings(BaseSettings):
     cache_enabled: bool = True
     cache_ttl_seconds: int = Field(default=3600, ge=1)
     cache_max_entries: int = Field(default=500, ge=1)
-    semantic_cache_enabled: bool = False
-    semantic_cache_threshold: float = Field(default=0.95, ge=0.5, le=1.0)
 
     # Retrieval & Prompts
     retrieval_top_k: int = Field(default=5, ge=1, le=30)
     retrieval_score_threshold: float = Field(default=0.50, ge=0.0, le=1.0)
     hybrid_bm25_weight: float = Field(default=0.35, ge=0.0, le=1.0)
     reranker_enabled: bool = True
-    prompt_version: str = "v1.0"
+    prompt_version: str = "v1.1"
 
     # History & Security
     history_retention_days: int = Field(default=90, ge=1)
     admin_api_key: SecretStr = SecretStr("dev-admin-key-change-me")
+    owner_api_key: SecretStr = SecretStr("dev-owner-key-change-me")
+    owner_dashboard_cache_ttl_seconds: int = Field(default=30, ge=0, le=3600)
+    topic_critical_error_rate: float = Field(default=45.0, ge=0.0, le=100.0)
+    topic_critical_min_gaps: int = Field(default=3, ge=1, le=1000)
+    topic_high_error_rate: float = Field(default=25.0, ge=0.0, le=100.0)
+    topic_medium_error_rate: float = Field(default=10.0, ge=0.0, le=100.0)
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
+    )
+    demo_mode_enabled: bool = True
+    demo_session_secret: SecretStr = SecretStr("dev-demo-session-secret-change-me")
     log_level: str = "INFO"
+
+    @property
+    def is_demo_mode_active(self) -> bool:
+        """Demo switcher/tokens are strictly restricted to non-production environments."""
+        return bool(self.demo_mode_enabled and self.app_env != "production")
+
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                import json
+
+                parsed = json.loads(raw)
+                items = [str(item).strip() for item in parsed if str(item).strip()]
+            else:
+                items = [part.strip() for part in raw.split(",") if part.strip()]
+        elif isinstance(value, (list, tuple)):
+            items = [str(item).strip() for item in value if str(item).strip()]
+        else:
+            raise ValueError("cors_allowed_origins must be a list of origin URLs or comma-separated string.")
+        if "*" in items:
+            raise ValueError("Wildcard '*' is not allowed in cors_allowed_origins; specify explicit origins.")
+        return items
 
     def ensure_directories(self) -> None:
         """Create required local storage directories if missing."""

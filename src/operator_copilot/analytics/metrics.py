@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.db.database import DatabaseManager, get_db_manager
@@ -37,29 +36,28 @@ class MetricsCollector:
         now = datetime.now(timezone.utc)
 
         with self.db.session() as db:
-            histories = db.query(QueryHistory).all()
-            total_queries = len(histories)
+            # 1. SQL-level aggregate KPIs on QueryHistory (avoids loading large answer/query blobs)
+            agg = db.query(
+                func.count(QueryHistory.id),
+                func.sum(case((QueryHistory.cache_hit.is_(True), 1), else_=0)),
+                func.sum(case((QueryHistory.error.is_not(None), 1), else_=0)),
+                func.sum(case((QueryHistory.needs_escalation.is_(True), 1), else_=0)),
+                func.avg(QueryHistory.processing_time_ms),
+                func.avg(case((QueryHistory.cache_hit.is_(False), QueryHistory.retrieval_time_ms), else_=None)),
+                func.avg(case((QueryHistory.cache_hit.is_(False), QueryHistory.generation_time_ms), else_=None)),
+            ).one()
 
+            total_queries = int(agg[0] or 0)
             if total_queries > 0:
-                cache_hits = sum(1 for h in histories if h.cache_hit)
+                cache_hits = int(agg[1] or 0)
                 cache_misses = total_queries - cache_hits
                 cache_hit_rate = round(cache_hits / total_queries, 4)
-                errors_count = sum(1 for h in histories if h.error is not None)
+                errors_count = int(agg[2] or 0)
                 error_rate = round(errors_count / total_queries, 4)
-                avg_processing_ms = round(sum(h.processing_time_ms for h in histories) / total_queries, 2)
-
-                non_cached = [h for h in histories if not h.cache_hit]
-                avg_retrieval_ms = (
-                    round(sum(h.retrieval_time_ms for h in non_cached) / len(non_cached), 2)
-                    if non_cached
-                    else 0.0
-                )
-                avg_generation_ms = (
-                    round(sum(h.generation_time_ms for h in non_cached) / len(non_cached), 2)
-                    if non_cached
-                    else 0.0
-                )
-                insufficient_evidence_count = sum(1 for h in histories if h.needs_escalation)
+                insufficient_evidence_count = int(agg[3] or 0)
+                avg_processing_ms = round(float(agg[4] or 0.0), 2)
+                avg_retrieval_ms = round(float(agg[5] or 0.0), 2)
+                avg_generation_ms = round(float(agg[6] or 0.0), 2)
             else:
                 cache_hits = 0
                 cache_misses = 0
@@ -71,40 +69,62 @@ class MetricsCollector:
                 avg_generation_ms = 0.0
                 insufficient_evidence_count = 0
 
-            # Document & topic frequency across queries
+            # 2. Slim projection for document/topic/user frequency counters
             doc_counter: Counter[str] = Counter()
             topic_counter: Counter[str] = Counter()
             user_counter: Counter[str] = Counter()
             escalation_topics: Counter[str] = Counter()
 
-            for h in histories:
-                user_counter[h.user_id] += 1
-                if h.topic:
-                    topic_counter[h.topic] += 1
-                    if h.needs_escalation:
-                        escalation_topics[h.topic] += 1
-                for doc_src in h.retrieved_doc_ids or []:
+            slim_rows = db.query(
+                QueryHistory.user_id,
+                QueryHistory.topic,
+                QueryHistory.retrieved_doc_ids,
+                QueryHistory.needs_escalation,
+            ).all()
+            for uid, topic, doc_ids, escalated in slim_rows:
+                user_counter[uid] += 1
+                if topic:
+                    topic_counter[topic] += 1
+                    if escalated:
+                        escalation_topics[topic] += 1
+                for doc_src in doc_ids or []:
                     doc_counter[doc_src] += 1
 
-            # Knowledge base stats
-            docs = db.query(DocumentMetadata).all()
-            indexed_docs = [d for d in docs if d.status == "indexed"]
-            unreadable_docs = [d for d in docs if d.status == "unreadable"]
-            duplicate_docs = [d for d in docs if d.status == "skipped_duplicate"]
-            total_chunks = sum(d.chunk_count for d in indexed_docs)
+            # 3. Knowledge base SQL aggregation by status
+            doc_rows = (
+                db.query(
+                    DocumentMetadata.status,
+                    func.count(DocumentMetadata.id),
+                    func.coalesce(func.sum(DocumentMetadata.chunk_count), 0),
+                )
+                .group_by(DocumentMetadata.status)
+                .all()
+            )
+            doc_counts = {st: int(cnt or 0) for st, cnt, _ in doc_rows}
+            doc_chunks = {st: int(ch or 0) for st, _, ch in doc_rows}
+            indexed_docs_cnt = doc_counts.get("indexed", 0)
+            unreadable_docs_cnt = doc_counts.get("unreadable", 0)
+            duplicate_docs_cnt = doc_counts.get("skipped_duplicate", 0)
+            total_chunks = doc_chunks.get("indexed", 0)
 
-            # Active cache entries
-            active_cache_entries = db.query(CacheEntry).filter(CacheEntry.expires_at > now).count()
+            # 4. Active cache entries & Feedback SQL aggregations
+            active_cache_entries = db.query(func.count(CacheEntry.id)).filter(CacheEntry.expires_at > now).scalar() or 0
 
-            # Feedback stats
-            feedbacks = db.query(QueryFeedback).all()
-            fb_count = len(feedbacks)
-            positive_fb = sum(1 for f in feedbacks if f.rating >= 4)
-            negative_fb = sum(1 for f in feedbacks if f.rating <= 2)
-            avg_rating = round(sum(f.rating for f in feedbacks) / fb_count, 2) if fb_count else None
+            fb_agg = db.query(
+                func.count(QueryFeedback.id),
+                func.sum(case((QueryFeedback.rating >= 4, 1), else_=0)),
+                func.sum(case((QueryFeedback.rating <= 2, 1), else_=0)),
+                func.avg(QueryFeedback.rating),
+            ).one()
+            fb_count = int(fb_agg[0] or 0)
+            positive_fb = int(fb_agg[1] or 0)
+            negative_fb = int(fb_agg[2] or 0)
+            avg_rating = round(float(fb_agg[3]), 2) if fb_count and fb_agg[3] is not None else None
 
-            custom_quizzes_total = db.query(CustomQuiz).count()
-            open_learning_gaps = db.query(LearningGap).filter(LearningGap.status != "RESOLVED").count()
+            custom_quizzes_total = db.query(func.count(CustomQuiz.id)).scalar() or 0
+            open_learning_gaps = (
+                db.query(func.count(LearningGap.id)).filter(LearningGap.status != "RESOLVED").scalar() or 0
+            )
 
         corpus_version = self.db.get_corpus_version()
         last_indexed_at = self.db.get_state("last_indexed_at", default="")
@@ -123,11 +143,11 @@ class MetricsCollector:
             },
             knowledge={
                 "corpus_version": corpus_version,
-                "indexed_documents": len(indexed_docs),
+                "indexed_documents": indexed_docs_cnt,
                 "total_chunks": total_chunks,
                 "last_indexed_at": last_indexed_at or None,
-                "unreadable_documents": len(unreadable_docs),
-                "duplicate_documents_skipped": len(duplicate_docs),
+                "unreadable_documents": unreadable_docs_cnt,
+                "duplicate_documents_skipped": duplicate_docs_cnt,
                 "queries_without_sufficient_evidence": insufficient_evidence_count,
                 "most_consulted_documents": [
                     {"document": doc, "count": cnt} for doc, cnt in doc_counter.most_common(10)

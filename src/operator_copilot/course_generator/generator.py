@@ -13,6 +13,17 @@ from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.course_generator.grounding_verifier import GroundingVerifier
 from operator_copilot.course_generator.lifecycle import CourseLifecycleManager
 from operator_copilot.course_generator.prompts import CURRICULUM_PROMPT, LESSON_PROMPT, QUIZ_PROMPT
+from operator_copilot.course_generator.quiz_helpers import (
+    build_contextual_distractors,
+    build_natural_focus,
+    clean_markdown_to_plain,
+    deterministic_shuffle_options,
+    extract_natural_quiz_statements,
+    is_usable_quiz_text,
+    short_document_label,
+    short_section_label,
+    truncate_at_boundary,
+)
 from operator_copilot.db.database import DatabaseManager, get_db_manager
 from operator_copilot.db.models import (
     Course,
@@ -26,6 +37,7 @@ from operator_copilot.db.models import (
     TrainingOpportunity,
 )
 from operator_copilot.generation.answer_generator import AnswerGenerator
+from operator_copilot.ingestion.normalizer import strip_area_prefix
 from operator_copilot.knowledge_intelligence.classifier import TopicClassifier
 from operator_copilot.knowledge_intelligence.extractor import KnowledgeExtractor
 from operator_copilot.knowledge_intelligence.opportunities import OpportunityAggregator
@@ -58,7 +70,7 @@ class AICourseGenerator:
 
     @staticmethod
     def _clean_text(text: str) -> str:
-        return re.sub(r"^\[Area:[^\]]+\]\n", "", text).strip()
+        return strip_area_prefix(text)
 
     def _load_topics_for_opportunity(self, opp: TrainingOpportunity) -> list[ExtractedTopic]:
         with self.db.session() as db:
@@ -559,6 +571,18 @@ class AICourseGenerator:
                 if lesson_id is None or les.id == lesson_id
             ]
             sources = [s for les in target_lessons for s in les.sources]
+            lesson_procedures = [
+                (les.title, step)
+                for les in target_lessons
+                for step in (les.procedures or [])
+                if isinstance(step, str) and step.strip()
+            ]
+            lesson_errors = [
+                (les.title, err)
+                for les in target_lessons
+                for err in (les.frequent_errors or [])
+                if isinstance(err, dict)
+            ]
             target_title = target_lessons[0].title if (lesson_id and target_lessons) else course.title
 
         ctx = "\n\n".join(
@@ -581,54 +605,195 @@ class AICourseGenerator:
                 questions_payload.append(
                     {
                         "question_type": q.question_type,
-                        "question_text": q.question_text,
-                        "options": q.options,
-                        "correct_answer": q.correct_answer,
-                        "explanation": q.explanation,
+                        "question_text": clean_markdown_to_plain(q.question_text),
+                        "options": [clean_markdown_to_plain(opt) for opt in q.options],
+                        "correct_answer": clean_markdown_to_plain(q.correct_answer),
+                        "explanation": clean_markdown_to_plain(q.explanation),
                         "source_document_id": matched_src.document_id if matched_src else "",
                         "source_chunk_id": matched_src.chunk_id if matched_src else "",
                         "source_section": matched_src.section if matched_src else q.source_section,
                     }
                 )
         else:
-            # Deterministic grounded quiz builder from real rules, errors, and passages
+            # Deterministic grounded quiz builder using real course errors, cross-section procedures, and shuffled options
+            seen_q: set[str] = set()
+            seen_answers: set[str] = set()
+            course_antipatterns = [
+                clean_markdown_to_plain(str(err_item.get("error_or_antipattern") or ""))
+                for _, err_item in lesson_errors
+                if is_usable_quiz_text(
+                    clean_markdown_to_plain(str(err_item.get("error_or_antipattern") or "")),
+                    min_len=30,
+                )
+            ]
+            course_fixes = [
+                clean_markdown_to_plain(str(err_item.get("consequence_or_fix") or ""))
+                for _, err_item in lesson_errors
+                if is_usable_quiz_text(
+                    clean_markdown_to_plain(str(err_item.get("consequence_or_fix") or "")),
+                    min_len=25,
+                )
+            ] + [
+                clean_markdown_to_plain(step)
+                for _, step in lesson_procedures
+                if is_usable_quiz_text(clean_markdown_to_plain(step), min_len=25)
+            ]
+            section_stmts: list[tuple[str, str]] = []
+            for src in sources:
+                for st in extract_natural_quiz_statements(src.excerpt, min_len=35, max_len=165):
+                    section_stmts.append((src.section, st))
+
+            # 1. Prioritize real frequent errors when available
+            for idx, (les_title, err_item) in enumerate(lesson_errors):
+                if len(questions_payload) >= num_questions:
+                    break
+                err_text = truncate_at_boundary(str(err_item.get("error_or_antipattern") or ""), max_len=165)
+                if not is_usable_quiz_text(err_text, min_len=30):
+                    continue
+                if err_text.lower() in seen_answers:
+                    continue
+                err_sec = str(err_item.get("section") or "").strip()
+                matched_src = (
+                    next((s for s in sources if err_sec and err_sec.lower() in s.section.lower()), None)
+                    or (sources[idx % len(sources)] if sources else None)
+                )
+                focus = build_natural_focus(err_sec or (matched_src.section if matched_src else ""), les_title)
+                doc_short = short_document_label(matched_src.source if matched_src else "")
+                q_text = f"In riferimento a «{focus}», quale comportamento o anomalia va evitata perché causa un blocco? (Fonte: {doc_short})"
+                if q_text.lower() in seen_q:
+                    continue
+                seen_q.add(q_text.lower())
+                seen_answers.add(err_text.lower())
+                err_fix = clean_markdown_to_plain(str(err_item.get("consequence_or_fix") or ""))
+                prioritized_fixes = ([err_fix] if len(err_fix) >= 25 else []) + course_fixes
+                distractors = build_contextual_distractors(
+                    correct_option=err_text,
+                    focus=focus,
+                    mode="avoid_error",
+                    domain_wrong_pool=prioritized_fixes,
+                    other_section_pool=[st for _, st in section_stmts],
+                )
+                opts, _ = deterministic_shuffle_options(
+                    err_text,
+                    distractors,
+                    seed_key=f"{course_id}:err:{idx}:{err_text[:40]}",
+                )
+                questions_payload.append(
+                    {
+                        "question_type": "multiple_choice",
+                        "question_text": q_text,
+                        "options": opts,
+                        "correct_answer": err_text,
+                        "explanation": f"Regola operativa tratta da «{focus}» ({doc_short}).",
+                        "source_document_id": matched_src.document_id if matched_src else "",
+                        "source_chunk_id": matched_src.chunk_id if matched_src else "",
+                        "source_section": matched_src.section if matched_src else les_title,
+                    }
+                )
+
+            # 2. Extract clean factual statements from lesson sources (natural phrasing + contextual distractors)
             for idx, src in enumerate(sources):
                 if len(questions_payload) >= num_questions:
                     break
-                excerpt_clean = " ".join(src.excerpt.split())
-                if len(excerpt_clean) < 40:
+                stmts = extract_natural_quiz_statements(src.excerpt, min_len=40, max_len=165)
+                if not stmts:
                     continue
+                stmt = next((s for s in stmts if s.lower() not in seen_answers), None)
+                if stmt is None:
+                    continue
+                focus = build_natural_focus(src.section, src.document_title)
+                doc_short = short_document_label(src.source)
+                other_sec_stmts = [st for sec, st in section_stmts if sec != src.section]
+
                 if idx % 2 == 0:
+                    q_text = f"Nell'ambito di «{focus}», quale indicazione operativa occorre seguire? (Fonte: {doc_short})"
+                    if q_text.lower() in seen_q:
+                        continue
+                    seen_q.add(q_text.lower())
+                    seen_answers.add(stmt.lower())
+                    distractors = build_contextual_distractors(
+                        correct_option=stmt,
+                        focus=focus,
+                        mode="correct_rule",
+                        domain_wrong_pool=course_antipatterns,
+                        other_section_pool=other_sec_stmts,
+                    )
+                    opts, _ = deterministic_shuffle_options(
+                        stmt,
+                        distractors,
+                        seed_key=f"{course_id}:{src.chunk_id}:{idx}",
+                    )
                     questions_payload.append(
                         {
                             "question_type": "multiple_choice",
-                            "question_text": f"In base alla sezione '{src.section}', quale indicazione è documentata in '{src.document_title}'?",
-                            "options": [
-                                excerpt_clean[:160],
-                                "Inviare la richiesta esclusivamente via SMS o chiamata telefonica diretta.",
-                                "Omettere riferimenti e oggetto nella segnalazione.",
-                                "Nessuna procedura è descritta nella documentazione.",
-                            ],
-                            "correct_answer": excerpt_clean[:160],
-                            "explanation": f"Verifica diretta nel documento '{src.source}', sezione '{src.section}'.",
+                            "question_text": q_text,
+                            "options": opts,
+                            "correct_answer": stmt,
+                            "explanation": f"Verifica diretta nella sezione «{short_section_label(src.section)}» ({doc_short}).",
                             "source_document_id": src.document_id,
                             "source_chunk_id": src.chunk_id,
                             "source_section": src.section,
                         }
                     )
                 else:
+                    q_text = f"Vero o Falso — Riguardo a «{focus}», vale questa regola: \"{stmt}\" (Fonte: {doc_short})"
+                    if q_text.lower() in seen_q:
+                        continue
+                    seen_q.add(q_text.lower())
                     questions_payload.append(
                         {
                             "question_type": "true_false",
-                            "question_text": f"Vero o Falso — Secondo '{src.section}', vale quanto segue: \"{excerpt_clean[:140]}\"?",
+                            "question_text": q_text,
                             "options": ["Vero", "Falso"],
                             "correct_answer": "Vero",
-                            "explanation": f"Confermato nel passaggio sorgente ({src.chunk_id}).",
+                            "explanation": f"Confermato nella sezione «{short_section_label(src.section)}» ({doc_short}).",
                             "source_document_id": src.document_id,
                             "source_chunk_id": src.chunk_id,
                             "source_section": src.section,
                         }
                     )
+
+            # 3. Top up remaining slots from lesson procedures if sources were sparse
+            for idx, (les_title, raw_step) in enumerate(lesson_procedures):
+                if len(questions_payload) >= num_questions:
+                    break
+                if "seguire quanto indicato nella sezione" in raw_step.lower():
+                    continue
+                stmt = truncate_at_boundary(raw_step, max_len=165)
+                if len(stmt) < 35 or stmt.lower() in seen_answers:
+                    continue
+                matched_src = sources[idx % len(sources)] if sources else None
+                doc_short = short_document_label(matched_src.source if matched_src else "")
+                focus = build_natural_focus(matched_src.section if matched_src else "", les_title)
+                q_text = f"Quale regola operativa si applica durante «{focus}»? (Fonte: {doc_short})"
+                if q_text.lower() in seen_q:
+                    continue
+                seen_q.add(q_text.lower())
+                seen_answers.add(stmt.lower())
+                distractors = build_contextual_distractors(
+                    correct_option=stmt,
+                    focus=focus,
+                    mode="correct_rule",
+                    domain_wrong_pool=course_antipatterns,
+                    other_section_pool=[st for _, st in section_stmts],
+                )
+                opts, _ = deterministic_shuffle_options(
+                    stmt,
+                    distractors,
+                    seed_key=f"{course_id}:proc:{idx}",
+                )
+                questions_payload.append(
+                    {
+                        "question_type": "multiple_choice",
+                        "question_text": q_text,
+                        "options": opts,
+                        "correct_answer": stmt,
+                        "explanation": f"Procedura documentata per «{les_title}» ({doc_short}).",
+                        "source_document_id": matched_src.document_id if matched_src else "",
+                        "source_chunk_id": matched_src.chunk_id if matched_src else "",
+                        "source_section": matched_src.section if matched_src else les_title,
+                    }
+                )
 
         quiz_id = f"quiz_{uuid.uuid4().hex[:12]}"
         with self.db.session() as db:

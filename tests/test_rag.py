@@ -94,3 +94,56 @@ def test_prompt_injection_delimiter_sanitization() -> None:
     sanitized = AnswerGenerator._sanitize_context_text(malicious)
     assert "</retrieved_context>" not in sanitized
     assert "[/retrieved_context]" in sanitized
+
+
+def test_extractive_fallback_isolates_source_headings_from_numbered_lists(test_settings: Settings) -> None:
+    from langchain_core.documents import Document
+    from operator_copilot.retrieval.retriever import RetrievedChunk
+
+    gen = AnswerGenerator(settings=test_settings)
+    chunks = [
+        RetrievedChunk(
+            document=Document(
+                page_content=(
+                    "[Area: 15 - Codice della Strada]\n"
+                    "# Rimuovere un verbale da un ruolo\n\n"
+                    "1. Individua il verbale.\n2. Usa F7 - Cancella.\n3. Controlla la griglia."
+                ),
+                metadata={
+                    "title": "Rimuovere un verbale da un ruolo",
+                    "heading_path": "Rimuovere un verbale da un ruolo",
+                    "source": "005 - Rimuovere verbale da ruolo.md",
+                },
+            ),
+            dense_score=0.9,
+            bm25_score=0.5,
+            relevance_score=0.85,
+        ),
+        RetrievedChunk(
+            document=Document(
+                page_content=(
+                    "[Area: 15 - Codice della Strada]\n"
+                    "# Aggiungere manualmente un verbale\n\n"
+                    "## Percorso\nMenù Ruoli"
+                ),
+                metadata={
+                    "title": "Aggiungere manualmente un verbale",
+                    "heading_path": "Sezione Ruoli > Aggiungere manualmente un verbale",
+                    "source": "006 - Aggiungere verbale.md",
+                },
+            ),
+            dense_score=0.8,
+            bm25_score=0.4,
+            relevance_score=0.75,
+        ),
+    ]
+
+    ans = gen._extractive_fallback("Come si rimuove un verbale da un ruolo?", chunks)
+    # Sources must use ### headings so inner numbered lists (1., 2., 3.) never merge into source 2
+    assert "### 1. Rimuovere un verbale da un ruolo" in ans
+    assert "### 2. Aggiungere manualmente un verbale" in ans
+    assert "*Sezione: Rimuovere un verbale da un ruolo*" not in ans  # no duplicate section when identical to title
+    assert "# Rimuovere un verbale da un ruolo\n" not in ans  # no duplicate H1 inside snippet
+    assert "#### Percorso" in ans
+    assert "\n---\n" in ans
+

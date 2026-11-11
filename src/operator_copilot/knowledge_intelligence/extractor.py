@@ -18,7 +18,7 @@ from operator_copilot.db.models import DocumentMetadata, ExtractedTopic
 from operator_copilot.generation.answer_generator import AnswerGenerator
 from operator_copilot.ingestion.chunker import DocumentChunker
 from operator_copilot.ingestion.loaders import DocumentLoader, LoadError
-from operator_copilot.ingestion.normalizer import ContentNormalizer
+from operator_copilot.ingestion.normalizer import ContentNormalizer, strip_area_prefix
 from operator_copilot.ingestion.scanner import DataScanner, ScannedFile
 from operator_copilot.retrieval.retriever import HybridRetriever
 from operator_copilot.schemas.academy import KnowledgeExtractionLLMOutput
@@ -29,7 +29,6 @@ _NUMBERED_ITEM_RE = re.compile(r"^\s*\d+\.\s+(.+)$", re.MULTILINE)
 _BULLET_ITEM_RE = re.compile(r"^\s*[-*]\s+(.+)$", re.MULTILINE)
 _WARNING_RE = re.compile(r"^\s*>\s*(?:⚠️\s*)?(.+)$", re.MULTILINE)
 _SUBHEADING_RE = re.compile(r"^(#{2,4})\s+(.+)$", re.MULTILINE)
-_CONTEXT_PREFIX_RE = re.compile(r"^\[Area:[^\]]+\]\n")
 
 _KNOWN_SOFTWARE_KEYWORDS = {
     "Cityware Online": "Cityware Online (CWOL)",
@@ -161,7 +160,7 @@ class KnowledgeExtractor:
 
     @staticmethod
     def _clean_chunk_text(text: str) -> str:
-        return _CONTEXT_PREFIX_RE.sub("", text).strip()
+        return strip_area_prefix(text)
 
     @classmethod
     def _detect_software_modules(cls, full_text: str, area_name: str | None) -> list[str]:

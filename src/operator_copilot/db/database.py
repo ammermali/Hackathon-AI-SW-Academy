@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import threading
+import uuid
 from typing import Iterator
 
 from sqlalchemy import create_engine, event
@@ -73,14 +75,27 @@ class DatabaseManager:
             state = db.get(SystemState, key)
             return state.value if state else default
 
+    def get_owner_metrics_version(self, tenant_id: str) -> str:
+        """Return current invalidation version token for a tenant's Owner metrics cache."""
+        return self.get_state(f"owner_cache_ver:{tenant_id}", default="0")
+
+    def bump_owner_metrics_version(self, tenant_id: str) -> str:
+        """Invalidate Owner dashboard cache across all service instances for a tenant."""
+        new_ver = uuid.uuid4().hex[:12]
+        self.set_state(f"owner_cache_ver:{tenant_id}", new_ver)
+        return new_ver
+
 
 _db_manager_cache: dict[str, DatabaseManager] = {}
+_db_manager_lock = threading.Lock()
 
 
 def get_db_manager(settings: Settings | None = None) -> DatabaseManager:
-    """Return a cached DatabaseManager for the configured database URL."""
+    """Return a thread-safe cached DatabaseManager for the configured database URL."""
     cfg = settings or get_settings()
     cfg.ensure_directories()
     if cfg.database_url not in _db_manager_cache:
-        _db_manager_cache[cfg.database_url] = DatabaseManager(cfg.database_url)
+        with _db_manager_lock:
+            if cfg.database_url not in _db_manager_cache:
+                _db_manager_cache[cfg.database_url] = DatabaseManager(cfg.database_url)
     return _db_manager_cache[cfg.database_url]

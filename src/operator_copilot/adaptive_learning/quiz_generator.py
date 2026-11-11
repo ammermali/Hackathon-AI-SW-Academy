@@ -14,16 +14,23 @@ from sqlalchemy.orm import joinedload
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.course_generator.prompts import CUSTOM_QUIZ_PROMPT
+from operator_copilot.course_generator.quiz_helpers import (
+    build_natural_focus,
+    clean_markdown_to_plain,
+    extract_natural_quiz_statements,
+    short_document_label,
+    short_section_label,
+)
 from operator_copilot.db.database import DatabaseManager, get_db_manager
 from operator_copilot.db.models import CustomQuiz, CustomQuizAttempt, CustomQuizQuestion, ExtractedTopic
 from operator_copilot.generation.answer_generator import AnswerGenerator
+from operator_copilot.ingestion.normalizer import strip_area_prefix
 from operator_copilot.retrieval.retriever import HybridRetriever
 from operator_copilot.schemas.customquiz import CustomQuizGenerationLLM
 
 logger = logging.getLogger("operator_copilot.adaptive_learning.quiz_generator")
 
 _LETTERS = ("A", "B", "C", "D")
-_PREFIX_CLEAN_RE = re.compile(r"^\[Area:[^\]]+\]\n")
 
 
 def _normalize_question_hash(text: str) -> str:
@@ -77,7 +84,7 @@ class CustomQuizGenerator:
                     if cid in seen_chunks:
                         continue
                     seen_chunks.add(cid)
-                    clean_txt = _PREFIX_CLEAN_RE.sub("", item.document.page_content).strip()
+                    clean_txt = strip_area_prefix(item.document.page_content)
                     passages.append(
                         {
                             "topic": topic_str,
@@ -121,16 +128,7 @@ class CustomQuizGenerator:
     @staticmethod
     def _extract_factual_statements(passage_text: str) -> list[str]:
         """Extract concise factual operational rules/statements directly from document text."""
-        candidates: list[str] = []
-        for raw_line in passage_text.splitlines():
-            line = re.sub(r"^[\s\-*\d.>⚠️]+", "", raw_line).strip()
-            line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)
-            if 30 <= len(line) <= 220 and not line.startswith("#") and not line.startswith("|"):
-                candidates.append(line)
-        if not candidates and len(passage_text.strip()) >= 30:
-            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", passage_text.strip()) if len(s.strip()) >= 30]
-            candidates.extend(sentences[:4])
-        return candidates
+        return extract_natural_quiz_statements(passage_text, min_len=30, max_len=210)
 
     def _build_deterministic_questions(
         self,
@@ -156,10 +154,10 @@ class CustomQuizGenerator:
         ]
 
         prompts_variants = [
-            "Secondo '{doc}' (sezione '{sec}'), quale regola operativa è corretta riguardo a {topic}?",
-            "Durante l'attività su '{topic}', quale comportamento risulta conforme a '{doc}' ({sec})?",
-            "Verifica operativa ({topic}): quale indicazione è espressamente riportata in '{sec}' di '{doc}'?",
-            "Per evitare errori in '{topic}' secondo quanto documentato in '{doc}' ({sec}), cosa occorre fare?",
+            "In riferimento a «{focus}», quale comportamento operativo è corretto adottare? (Fonte: {doc_short})",
+            "Cosa occorre fare per gestire correttamente «{focus}»? (Fonte: {doc_short})",
+            "Durante un'attività che riguarda «{focus}», quale regola va applicata? (Fonte: {doc_short})",
+            "Per evitare errori operativi su «{focus}», quale indicazione bisogna seguire? (Fonte: {doc_short})",
         ]
 
         # Rotate passages and variant styles based on user attempt iteration
@@ -174,16 +172,15 @@ class CustomQuizGenerator:
             if len(questions) >= num_questions:
                 break
 
+            doc_short = short_document_label(p["document"])
+            focus = build_natural_focus(p["section"], str(p.get("topic") or primary_topic))
             var_style = prompts_variants[(idx + iteration - 1) % len(prompts_variants)]
-            q_text = var_style.format(
-                doc=p["document"],
-                sec=p["section"] or "Sezione operativa",
-                topic=p.get("topic") or primary_topic,
-            )
+            q_text = var_style.format(focus=focus, doc_short=doc_short)
             q_hash = _normalize_question_hash(f"{q_text}::{stmt[:60]}")
             if q_hash in previous_hashes:
                 # Re-angle question to ensure a genuinely distinct verification item
-                q_text = f"[Verifica #{iteration}] Nel documento '{p['document']}' ({p['section']}), quale disposizione si applica a '{p.get('topic') or primary_topic}'?"
+                sec_short = short_section_label(p["section"], fallback=primary_topic)
+                q_text = f"Caso pratico #{iteration} su «{sec_short}»: quale procedura consente di procedere correttamente? (Fonte: {doc_short})"
                 q_hash = _normalize_question_hash(f"{q_text}::{stmt[:80]}::{iteration}")
                 if q_hash in previous_hashes:
                     continue
@@ -216,7 +213,7 @@ class CustomQuizGenerator:
                     "options": formatted_opts,
                     "correct_option_id": correct_letter,
                     "correct_answer": stmt,
-                    "explanation": f"Fonte verificata in '{p['document']}' (sezione '{p['section']}', chunk '{p['chunk_id']}'): {stmt}",
+                    "explanation": f"Fonte: {doc_short} — {short_section_label(p['section'])}. {stmt}",
                     "topic": str(p.get("topic") or primary_topic),
                     "difficulty": diff,
                     "sources": [
@@ -404,16 +401,18 @@ class CustomQuizGenerator:
                         (p for p in passages if q.source_section and q.source_section.lower() in p["section"].lower()),
                         passages[0],
                     )
-                    opts = [{"id": _LETTERS[i], "text": q.options[i]} for i in range(4)]
+                    clean_q_text = clean_markdown_to_plain(q.question_text)
+                    clean_opts = [clean_markdown_to_plain(opt) for opt in q.options]
+                    opts = [{"id": _LETTERS[i], "text": clean_opts[i]} for i in range(4)]
                     c_letter = _LETTERS[q.correct_option_index]
                     questions_data.append(
                         {
                             "question_hash": qh,
-                            "question_text": q.question_text,
+                            "question_text": clean_q_text,
                             "options": opts,
                             "correct_option_id": c_letter,
-                            "correct_answer": q.options[q.correct_option_index],
-                            "explanation": q.explanation,
+                            "correct_answer": clean_opts[q.correct_option_index],
+                            "explanation": clean_markdown_to_plain(q.explanation),
                             "topic": q.topic or targets[0]["topic"],
                             "difficulty": q.difficulty,
                             "sources": [

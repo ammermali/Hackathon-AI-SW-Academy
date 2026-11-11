@@ -69,7 +69,11 @@ LESSON_PROMPT = _make_prompt(
 
 QUIZ_PROMPT = _make_prompt(
     "Sei il modulo Quiz Generator. Crea domande di verifica (scelta multipla, vero/falso, scenario operativo) "
-    "strettamente ancorate ai passaggi documentali forniti, indicando la sezione sorgente e la spiegazione.",
+    "strettamente ancorate ai passaggi documentali forniti, indicando la sezione sorgente e la spiegazione. "
+    "STILE OBBLIGATORIO: formula domande in linguaggio naturale orientate al caso pratico e al contenuto operativo "
+    "(es. 'Cosa occorre fare quando...', 'Quale regola si applica se...'). NON iniziare la domanda con percorsi file "
+    "o lunghi breadcrumb di sezione (la fonte va indicata nei metadati o al più con un breve '(Fonte: nome_file)' in coda) "
+    "e NON inserire sintassi Markdown (# o **) dentro il testo delle domande o delle opzioni.",
     "Corso/Lezione: {target_title}\nNumero domande richiesto: {num_questions}\n\n"
     "<retrieved_context>\n{context}\n</retrieved_context>\n\n"
     "Restituisci JSON conforme allo schema QuizGenerationLLMOutput.",
@@ -88,12 +92,25 @@ CUSTOM_QUIZ_PROMPT = _make_prompt(
     "Genera domande personalizzate a risposta multipla con ESATTAMENTE QUATTRO opzioni (A, B, C, D) e una sola risposta corretta, "
     "basandoti esclusivamente su <retrieved_context>. "
     "Adatta le domande al livello stimato dell'utente ({estimated_level}) e alle lacune rilevate ({gaps_summary}), "
-    "formulando varianti diverse dalle domande già somministrate in passato ({previous_questions}).",
+    "formulando varianti diverse dalle domande già somministrate in passato ({previous_questions}). "
+    "STILE OBBLIGATORIO: formula domande naturali orientate alla situazione pratica e ai contenuti reali "
+    "(es. 'In quale situazione bisogna...', 'Come si gestisce correttamente...', 'Cosa accade se...') senza iniziare con nomi file "
+    "o path di cartelle; inserisci eventuali riferimenti alla fonte nei campi `sources`/`explanation` o al massimo un breve `(Fonte: nome_file)` a fine domanda, "
+    "e NON inserire marcatori Markdown (#, **) nelle domande o nelle opzioni.",
     "Utente: {user_id} | Software: {software} | Modulo: {module_name}\n"
     "Numero domande richiesto: {num_questions}\n"
     "Argomenti target: {target_topics}\n\n"
     "<retrieved_context>\n{context}\n</retrieved_context>\n\n"
     "Restituisci esclusivamente JSON conforme allo schema CustomQuizGenerationLLM.",
+)
+
+OWNER_INSIGHTS_PROMPT = _make_prompt(
+    "Sei l'assistente di Learning Analytics di Operator Copilot per gli Owner della Pubblica Amministrazione. "
+    "Analizza le metriche aggregate fornite in <retrieved_context> e produci suggerimenti formativi azionabili, "
+    "sintetici e rigorosamente ancorati ai numeri osservati. Non inventare cifre o nomi non presenti nei dati.",
+    "Tenant: {tenant_id} | Ambito: {scope_summary}\n\n"
+    "<retrieved_context>\n{context}\n</retrieved_context>\n\n"
+    "Restituisci esclusivamente JSON conforme allo schema OwnerInsightsLLMOutput.",
 )
 
 PROMPT_REGISTRY = {
@@ -106,4 +123,5 @@ PROMPT_REGISTRY = {
     "quiz": QUIZ_PROMPT,
     "source_verification": SOURCE_VERIFICATION_PROMPT,
     "custom_quiz": CUSTOM_QUIZ_PROMPT,
+    "owner_insights": OWNER_INSIGHTS_PROMPT,
 }

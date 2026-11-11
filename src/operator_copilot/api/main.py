@@ -6,10 +6,13 @@ import secrets
 from functools import lru_cache
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from operator_copilot import __version__
 from operator_copilot.api.academy_router import create_academy_router
 from operator_copilot.api.customquiz_router import create_customquiz_router
+from operator_copilot.api.demo_router import create_demo_router
+from operator_copilot.api.owner_router import create_owner_router
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.retrieval.rag_engine import RAGEngine
 from operator_copilot.schemas.query import FeedbackRequest, IngestRequest, RAGQueryRequest
@@ -40,6 +43,15 @@ def create_app(engine: RAGEngine | None = None, settings: Settings | None = None
             "citazioni dalle fonti reali, smart caching, storico ricerche e metriche operative."
         ),
     )
+
+    if cfg.cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cfg.cors_allowed_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "Accept", "X-User-ID", "X-Tenant-ID", "X-User-Role", "X-Demo-Token"],
+        )
 
     def get_rag_engine() -> RAGEngine:
         return engine or _default_engine()
@@ -163,6 +175,18 @@ def create_app(engine: RAGEngine | None = None, settings: Settings | None = None
     )
     app.include_router(
         create_customquiz_router(
+            get_rag_engine=get_rag_engine,
+            settings=cfg,
+        )
+    )
+    app.include_router(
+        create_owner_router(
+            get_rag_engine=get_rag_engine,
+            settings=cfg,
+        )
+    )
+    app.include_router(
+        create_demo_router(
             get_rag_engine=get_rag_engine,
             settings=cfg,
         )

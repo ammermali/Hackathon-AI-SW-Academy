@@ -5,6 +5,13 @@ from __future__ import annotations
 import hashlib
 import re
 
+_AREA_PREFIX_RE = re.compile(r"^\[Area:[^\]]+\]\n")
+
+
+def strip_area_prefix(text: str) -> str:
+    """Remove internal [Area: ...] chunk header prefix consistently across engines."""
+    return _AREA_PREFIX_RE.sub("", text).strip()
+
 
 class ContentNormalizer:
     """Normalizes Markdown/text documents while preserving semantic structure and UI cues."""

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from operator_copilot.adaptive_learning.service import AdaptiveLearningService
 from operator_copilot.retrieval.rag_engine import RAGEngine

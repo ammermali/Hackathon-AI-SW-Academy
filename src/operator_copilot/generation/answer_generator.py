@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.generation.prompts import ABSTENTION_ANSWER, build_rag_prompt
+from operator_copilot.ingestion.normalizer import strip_area_prefix
 from operator_copilot.retrieval.retriever import RetrievedChunk
 from operator_copilot.schemas.response import SourceCitation
 
@@ -228,30 +229,76 @@ class AnswerGenerator:
     @staticmethod
     def _strip_context_prefix(text: str) -> str:
         """Remove internal chunk header prefix before presenting extractive snippets."""
-        return re.sub(r"^\[Area:[^\]]+\]\n", "", text).strip()
+        return strip_area_prefix(text)
+
+    @staticmethod
+    def _format_extractive_snippet(raw_text: str, doc_label: str, section: str) -> str:
+        """Clean chunk text, drop redundant title headings, demote subheadings, and truncate safely."""
+        cleaned = strip_area_prefix(raw_text).strip()
+        lines = cleaned.splitlines()
+
+        leaf_section = section.split(">")[-1].strip().lower() if section else ""
+        norm_label = doc_label.strip().lower()
+
+        # Drop leading Markdown heading when it merely duplicates the source title/section
+        if lines:
+            m = re.match(r"^#{1,6}\s+(.+?)\s*$", lines[0].strip())
+            if m:
+                heading_text = m.group(1).strip().lower()
+                if heading_text in {norm_label, leaf_section}:
+                    lines = lines[1:]
+                    while lines and not lines[0].strip():
+                        lines = lines[1:]
+
+        # Demote document headings outside code fences so ### source headers stay top-level
+        demoted: list[str] = []
+        in_fence = False
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith("```"):
+                in_fence = not in_fence
+                demoted.append(line)
+                continue
+            if not in_fence:
+                line = re.sub(r"^#{1,3}(\s+)", r"####\1", line)
+            demoted.append(line)
+
+        snippet = "\n".join(demoted).strip()
+        if len(snippet) > 750:
+            cut = snippet[:750].rfind("\n")
+            if cut < 250:
+                cut = snippet[:750].rfind(". ")
+            snippet = snippet[: cut if cut > 200 else 750].rstrip() + "..."
+            if snippet.count("```") % 2 == 1:
+                snippet += "\n```"
+        return snippet
 
     def _extractive_fallback(self, query: str, chunks: list[RetrievedChunk]) -> str:
         """Produce a strictly grounded Italian procedural summary directly from retrieved chunks."""
-        lines = [
-            f'In base alla documentazione recuperata per "{query}", risultano rilevanti le seguenti indicazioni operative:\n'
+        blocks = [
+            f'In base alla documentazione recuperata per "{query}", risultano rilevanti le seguenti indicazioni operative:'
         ]
+        source_sections: list[str] = []
         for idx, item in enumerate(chunks[:3], start=1):
             meta = item.document.metadata
-            doc_label = meta.get("title") or meta.get("source", "Documento")
-            section = meta.get("heading_path") or meta.get("section") or ""
-            snippet = self._strip_context_prefix(item.document.page_content)
-            # Limit single snippet cleanly at sentence/line boundary
-            if len(snippet) > 650:
-                cut = snippet[:650].rfind("\n")
-                if cut < 250:
-                    cut = snippet[:650].rfind(". ")
-                snippet = snippet[: cut if cut > 200 else 650].strip() + "..."
-            lines.append(f"{idx}. **{doc_label}** (Sezione: *{section}*)\n{snippet}\n")
+            doc_label = str(meta.get("title") or meta.get("source") or "Documento").strip()
+            section = str(meta.get("heading_path") or meta.get("section") or "").strip()
+            snippet = self._format_extractive_snippet(item.document.page_content, doc_label, section)
 
-        lines.append(
-            "Nota: sintesi estratta direttamente dai passaggi documentali recuperati senza elaborazione generativa esterna."
+            parts = [f"### {idx}. {doc_label}"]
+            if section and section.lower() != doc_label.lower():
+                parts.append(f"*Sezione: {section}*")
+            if snippet:
+                parts.append(snippet)
+            source_sections.append("\n\n".join(parts))
+
+        if source_sections:
+            blocks.append("\n\n---\n\n".join(source_sections))
+
+        blocks.append(
+            "_Nota: sintesi estratta direttamente dai passaggi documentali recuperati senza elaborazione generativa esterna._"
         )
-        return "\n".join(lines)
+        return "\n\n".join(blocks)
 
     def generate(self, query: str, chunks: list[RetrievedChunk]) -> GenerationResult:
         """Generate grounded answer or abstain safely if evidence is missing."""

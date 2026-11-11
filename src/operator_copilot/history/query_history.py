@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from operator_copilot.cache.cache_policy import CachePolicy
 from operator_copilot.config.settings import Settings, get_settings

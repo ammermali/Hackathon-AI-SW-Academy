@@ -649,3 +649,65 @@ class CustomQuizAttempt(Base):
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
 
     quiz: Mapped[CustomQuiz] = relationship("CustomQuiz", back_populates="attempts")
+
+
+# ---------------------------------------------------------------------------
+# Owner Learning Dashboard & Governance Entities (Milestone 4)
+# ---------------------------------------------------------------------------
+
+
+class OrganizationUser(Base):
+    """Directory metadata mapping (tenant_id, user_id) to display name and administration."""
+
+    __tablename__ = "organization_users"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", name="uq_org_user_tenant_user"),
+        Index("ix_org_user_admin_scope", "tenant_id", "amministrazione"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    amministrazione: Mapped[str] = mapped_column(String(256), default="Predefinita", index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(48), default="operatore", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class OwnerAuditLog(Base):
+    """Audit trail of Owner Dashboard consultations and governance actions."""
+
+    __tablename__ = "owner_audit_logs"
+    __table_args__ = (Index("ix_owner_audit_tenant_date", "tenant_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True, nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    owner_role: Mapped[str] = mapped_column(String(48), default="owner", nullable=False)
+    action: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    resource: Mapped[str] = mapped_column(String(128), nullable=False)
+    target_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    filters: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+
+
+class LessonCompletion(Base):
+    """Tracks per-user completion of individual AI Academy lessons."""
+
+    __tablename__ = "lesson_completions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "lesson_id", name="uq_lesson_completion_user"),
+        Index("ix_lesson_completion_user_course", "tenant_id", "user_id", "course_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    course_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("courses.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    lesson_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lessons.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

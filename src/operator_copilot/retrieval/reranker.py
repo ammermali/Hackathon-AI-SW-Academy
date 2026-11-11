@@ -14,8 +14,46 @@ _ITALIAN_STOPWORDS = {
     "hai", "hanno", "il", "in", "la", "le", "lo", "ma", "mi", "nel", "nella",
     "nelle", "nello", "non", "per", "piu", "puo", "qual", "quale", "quali", "quando",
     "questo", "questa", "questi", "se", "si", "sono", "su", "sul", "sulla", "tra",
-    "un", "una", "uno", "posso", "fare", "essere", "questa", "procedura", "errore",
+    "un", "una", "uno", "posso", "fare", "essere", "procedura", "errore",
 }
+
+_CONVERSATIONAL_FILLER = {
+    "yo", "bro", "hey", "ehi", "ciao", "salve", "buongiorno", "buonasera",
+    "ragazzi", "raga", "scusa", "scusate", "scusi", "favore", "piacere",
+    "gentilmente", "cortesia", "vorrei", "sapere", "sapresti", "potresti",
+    "puoi", "dirmi", "spiegami", "spiegarmi", "aiutami", "capire", "aiuto",
+    "please", "pls",
+}
+
+_LEADING_GREETING_RE = re.compile(
+    r"^\s*(?:yo|bro|hey|ehi|ciao|salve|buongiorno|buonasera|raga(?:zzi)?|scusa(?:te|mi)?|per\s+favore|per\s+piacere|gentilmente)(?:[\s,!.:;]+|$)+",
+    re.IGNORECASE,
+)
+
+
+def normalize_retrieval_query(query: str) -> str:
+    """Strip colloquial greetings/filler while preserving domain terms and uppercase acronyms."""
+    raw = (query or "").strip()
+    if not raw:
+        return ""
+    cleaned = raw
+    for _ in range(3):
+        updated = _LEADING_GREETING_RE.sub("", cleaned).strip()
+        if updated == cleaned:
+            break
+        cleaned = updated
+
+    # Drop isolated filler words from the middle too, keeping uppercase tokens/acronyms intact
+    tokens = re.findall(r"\S+", cleaned)
+    kept: list[str] = []
+    for tok in tokens:
+        bare = re.sub(r"^[\W_]+|[\W_]+$", "", tok)
+        if bare and not bare.isupper() and bare.lower() in _CONVERSATIONAL_FILLER:
+            continue
+        kept.append(tok)
+
+    result = re.sub(r"[?!]{2,}", "?", " ".join(kept)).strip()
+    return result if len(re.sub(r"\W+", "", result)) >= 2 else re.sub(r"[?!]{2,}", "?", raw)
 
 
 @dataclass
@@ -36,8 +74,9 @@ class DocumentReranker:
 
     @staticmethod
     def _extract_query_terms(query: str) -> list[str]:
-        tokens = re.findall(r"\b[a-zA-Z0-9_\-\.]{2,}\b", query.lower())
-        return [t for t in tokens if t not in _ITALIAN_STOPWORDS]
+        normalized = normalize_retrieval_query(query)
+        tokens = re.findall(r"\b[a-zA-Z0-9_\-\.]{2,}\b", normalized.lower())
+        return [t for t in tokens if t not in _ITALIAN_STOPWORDS and t not in _CONVERSATIONAL_FILLER]
 
     def rerank(
         self,
@@ -58,12 +97,22 @@ class DocumentReranker:
             meta: dict[str, Any] = cand.document.metadata
             title_lower = str(meta.get("title", "")).lower()
 
-            # Exact term coverage ratio in chunk content and document title
-            term_hits = sum(1 for t in terms if t in content_lower)
-            coverage = (term_hits / len(terms)) if terms else 0.0
+            # Exact term coverage ratio in chunk content and document title (with light prefix stem tolerance)
+            term_score = 0.0
+            for t in terms:
+                if t in content_lower:
+                    term_score += 1.0
+                elif len(t) >= 6 and t[:5] in content_lower:
+                    term_score += 0.65
+            coverage = (term_score / len(terms)) if terms else 0.0
 
-            title_hits = sum(1 for t in terms if t in title_lower)
-            title_coverage = (title_hits / len(terms)) if terms else 0.0
+            title_score = 0.0
+            for t in terms:
+                if t in title_lower:
+                    title_score += 1.0
+                elif len(t) >= 6 and t[:5] in title_lower:
+                    title_score += 0.65
+            title_coverage = (title_score / len(terms)) if terms else 0.0
 
             # Acronym / code boost (e.g. ANPR, AP10, SIOPE+, IUV, VRE, CVE)
             acronym_hits = sum(1 for acr in upper_acronyms if acr in cand.document.page_content)

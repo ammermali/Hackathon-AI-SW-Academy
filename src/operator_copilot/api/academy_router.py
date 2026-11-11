@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import Any, Callable
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import joinedload
 
 from operator_copilot.api.dependencies import assert_user_access, build_caller_context_dependency
@@ -17,11 +19,15 @@ from operator_copilot.db.models import (
     Course,
     CourseApprovalEvent,
     CourseModule,
+    CourseQuizAttempt,
     CourseRevision,
+    CustomQuiz,
+    CustomQuizAttempt,
     ExtractedTopic,
     KnowledgeAnalysisJob,
     KnowledgeGap,
     Lesson,
+    LessonCompletion,
     Quiz,
     TopicRelevanceScore,
     TrainingOpportunity,
@@ -34,8 +40,13 @@ from operator_copilot.schemas.academy import (
     AnalysisJobRequest,
     AnalysisJobResponse,
     CourseGenerateRequest,
+    CourseProgressOverviewItem,
+    CourseQuizAttemptSummaryItem,
     CourseResponse,
+    CourseUpdateRequest,
+    CustomQuizAttemptSummaryItem,
     KnowledgeGapResponse,
+    LessonCompletionResponse,
     LessonResponse,
     LessonSourceResponse,
     LessonUpdateRequest,
@@ -48,6 +59,7 @@ from operator_copilot.schemas.academy import (
     RelevanceScoreResponse,
     TopicResponse,
     TrainingOpportunityResponse,
+    UserLearningOverviewResponse,
 )
 from operator_copilot.schemas.customquiz import CourseQuizSubmitRequest, CourseQuizSubmitResponse
 
@@ -150,6 +162,8 @@ def _has_role_access(allowed_roles: list[str] | None, caller_role: str) -> bool:
         return True
     if caller_role == "admin":
         return True
+    if caller_role == "owner":
+        return "owner" in allowed_roles or "operatore" in allowed_roles
     return caller_role in allowed_roles
 
 
@@ -162,6 +176,26 @@ def create_academy_router(
     """Create modular APIRouter for Knowledge Intelligence & AI Course Generator."""
     router = APIRouter(prefix="/api/v1/academy", tags=["Knowledge-to-Course Academy"])
     get_caller_context = build_caller_context_dependency(settings)
+
+    def verify_course_authoring_access(
+        ctx: dict[str, str] = Depends(get_caller_context),
+        x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+        x_owner_key: str | None = Header(default=None, alias="X-Owner-Key"),
+    ) -> dict[str, str]:
+        """Allow authenticated Admin (X-Admin-Key) or verified Owner (demo token or X-Owner-Key)."""
+        expected_admin = settings.admin_api_key.get_secret_value()
+        if x_admin_key and secrets.compare_digest(x_admin_key, expected_admin):
+            return ctx
+        if ctx["role"] == "owner":
+            expected_owner = settings.owner_api_key.get_secret_value()
+            if ctx.get("is_demo_verified") == "true" or (
+                x_owner_key and secrets.compare_digest(x_owner_key, expected_owner)
+            ):
+                return ctx
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operazione riservata esclusivamente ad utenti Owner o Admin autenticati.",
+        )
 
     def _services(rag: RAGEngine) -> tuple[KnowledgeJobRunner, AICourseGenerator, GroundingVerifier, CourseLifecycleManager]:
         extractor = KnowledgeExtractor(
@@ -348,7 +382,7 @@ def create_academy_router(
         "/courses/generate",
         response_model=CourseResponse,
         summary="Genera un corso strutturato (non pubblicato automaticamente)",
-        dependencies=[Depends(verify_admin_key)],
+        dependencies=[Depends(verify_course_authoring_access)],
     )
     def generate_course(
         payload: CourseGenerateRequest,
@@ -380,6 +414,42 @@ def create_academy_router(
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
         return _serialize_course(course)
+
+    @router.patch(
+        "/courses/{course_id}",
+        response_model=CourseResponse,
+        summary="Modifica metadati del corso creando una nuova revisione",
+        dependencies=[Depends(verify_course_authoring_access)],
+    )
+    def update_course(
+        course_id: str,
+        payload: CourseUpdateRequest,
+        ctx: dict[str, str] = Depends(get_caller_context),
+        rag: RAGEngine = Depends(get_rag_engine),
+    ) -> CourseResponse:
+        with rag.db.session() as db:
+            course = db.query(Course).filter_by(id=course_id, tenant_id=ctx["tenant_id"]).first()
+            if course is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Corso non trovato.")
+            if payload.title is not None and payload.title.strip():
+                course.title = payload.title.strip()
+            if payload.description is not None and payload.description.strip():
+                course.description = payload.description.strip()
+            if payload.summary is not None:
+                course.summary = payload.summary.strip()
+            if payload.difficulty is not None and payload.difficulty.strip():
+                course.difficulty = payload.difficulty.strip()
+            if payload.allowed_roles is not None and len(payload.allowed_roles) > 0:
+                cleaned_roles = [r.strip().lower() for r in payload.allowed_roles if r.strip()]
+                if cleaned_roles:
+                    course.allowed_roles = cleaned_roles
+            db.commit()
+
+        _, course_gen, _, lifecycle = _services(rag)
+        lifecycle.record_revision(course_id, change_summary=payload.change_summary, changed_by=ctx["user_id"])
+        updated = course_gen.get_course(course_id, tenant_id=ctx["tenant_id"])
+        assert updated is not None
+        return _serialize_course(updated)
 
     @router.get("/courses", response_model=list[CourseResponse], summary="Elenca corsi del tenant accessibili")
     def list_courses(
@@ -426,7 +496,7 @@ def create_academy_router(
         "/courses/{course_id}/lessons/{lesson_id}",
         response_model=LessonResponse,
         summary="Modifica manualmente una lezione creando una nuova revisione",
-        dependencies=[Depends(verify_admin_key)],
+        dependencies=[Depends(verify_course_authoring_access)],
     )
     def update_lesson(
         course_id: str,
@@ -500,7 +570,7 @@ def create_academy_router(
         "/courses/{course_id}/lessons/{lesson_id}/regenerate",
         response_model=LessonResponse,
         summary="Rigenera una lezione dalle fonti originali",
-        dependencies=[Depends(verify_admin_key)],
+        dependencies=[Depends(verify_course_authoring_access)],
     )
     def regenerate_lesson(
         course_id: str,
@@ -552,7 +622,7 @@ def create_academy_router(
         "/courses/{course_id}/quizzes/generate",
         response_model=QuizResponse,
         summary="Genera quiz verificati per un corso o una singola lezione",
-        dependencies=[Depends(verify_admin_key)],
+        dependencies=[Depends(verify_course_authoring_access)],
     )
     def generate_quiz(
         course_id: str,
@@ -636,7 +706,7 @@ def create_academy_router(
         "/courses/{course_id}/lifecycle",
         response_model=CourseResponse,
         summary="Gestisce il workflow di revisione, approvazione, rifiuto e pubblicazione",
-        dependencies=[Depends(verify_admin_key)],
+        dependencies=[Depends(verify_course_authoring_access)],
     )
     def transition_course_lifecycle(
         course_id: str,
@@ -733,5 +803,195 @@ def create_academy_router(
                     for e in events
                 ],
             }
+
+    @router.post(
+        "/courses/{course_id}/lessons/{lesson_id}/complete",
+        response_model=LessonCompletionResponse,
+        summary="Segna una lezione come completata per l'utente corrente",
+    )
+    def complete_lesson(
+        course_id: str,
+        lesson_id: str,
+        ctx: dict[str, str] = Depends(get_caller_context),
+        rag: RAGEngine = Depends(get_rag_engine),
+    ) -> LessonCompletionResponse:
+        if ctx["user_id"] == "anonymous":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="È necessario un utente identificato per registrare il completamento della lezione.",
+            )
+        with rag.db.session() as db:
+            course = db.query(Course).filter_by(id=course_id, tenant_id=ctx["tenant_id"]).first()
+            if course is None or not _has_role_access(course.allowed_roles, ctx["role"]):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Corso non trovato.")
+            lesson = db.query(Lesson).filter_by(id=lesson_id, course_id=course_id).first()
+            if lesson is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lezione non trovata.")
+
+            existing = (
+                db.query(LessonCompletion)
+                .filter_by(tenant_id=ctx["tenant_id"], user_id=ctx["user_id"], lesson_id=lesson_id)
+                .first()
+            )
+            if existing is None:
+                existing = LessonCompletion(
+                    id=f"lcmp_{uuid.uuid4().hex[:12]}",
+                    tenant_id=ctx["tenant_id"],
+                    user_id=ctx["user_id"],
+                    course_id=course_id,
+                    lesson_id=lesson_id,
+                )
+                db.add(existing)
+                db.commit()
+                db.refresh(existing)
+                rag.db.bump_owner_metrics_version(ctx["tenant_id"])
+
+            return LessonCompletionResponse(
+                lesson_id=existing.lesson_id,
+                course_id=existing.course_id,
+                user_id=existing.user_id,
+                completed=True,
+                completed_at=existing.completed_at,
+            )
+
+    @router.get(
+        "/users/{user_id}/learning-overview",
+        response_model=UserLearningOverviewResponse,
+        summary="Stato avanzamento corsi, lezioni completate e storico quiz dell'utente",
+    )
+    def get_user_learning_overview(
+        user_id: str,
+        ctx: dict[str, str] = Depends(get_caller_context),
+        rag: RAGEngine = Depends(get_rag_engine),
+    ) -> UserLearningOverviewResponse:
+        assert_user_access(ctx, user_id)
+        tenant_id = ctx["tenant_id"]
+        with rag.db.session() as db:
+            courses = (
+                db.query(Course)
+                .options(
+                    joinedload(Course.modules).joinedload(CourseModule.lessons),
+                    joinedload(Course.quizzes),
+                )
+                .filter(Course.tenant_id == tenant_id)
+                .order_by(Course.created_at.desc())
+                .all()
+            )
+            accessible_courses = [c for c in courses if _has_role_access(c.allowed_roles, ctx["role"])]
+
+            completions = (
+                db.query(LessonCompletion)
+                .filter_by(tenant_id=tenant_id, user_id=user_id)
+                .order_by(LessonCompletion.completed_at.desc())
+                .all()
+            )
+            completed_lesson_ids = [c.lesson_id for c in completions]
+            completion_set = set(completed_lesson_ids)
+            last_lesson_by_course: dict[str, Any] = {}
+            for cmp_row in completions:
+                if cmp_row.course_id not in last_lesson_by_course:
+                    last_lesson_by_course[cmp_row.course_id] = cmp_row.completed_at
+
+            course_attempts = (
+                db.query(CourseQuizAttempt)
+                .filter_by(tenant_id=tenant_id, user_id=user_id)
+                .order_by(CourseQuizAttempt.completed_at.desc())
+                .all()
+            )
+            course_map = {c.id: c for c in courses}
+            quiz_map = {q.id: q for c in courses for q in c.quizzes}
+
+            attempts_by_course: dict[str, list[CourseQuizAttempt]] = {}
+            for att in course_attempts:
+                attempts_by_course.setdefault(att.course_id, []).append(att)
+
+            course_progress: list[CourseProgressOverviewItem] = []
+            for course in accessible_courses:
+                lesson_ids = [les.id for mod in course.modules for les in mod.lessons]
+                total_lessons = len(lesson_ids)
+                done_lessons = sum(1 for lid in lesson_ids if lid in completion_set)
+                c_attempts = attempts_by_course.get(course.id, [])
+                best_pct = max((a.percentage for a in c_attempts), default=None)
+                any_passed = any(a.passed for a in c_attempts)
+
+                if total_lessons > 0 and done_lessons >= total_lessons:
+                    c_status = "COMPLETED"
+                elif total_lessons == 0 and any_passed:
+                    c_status = "COMPLETED"
+                elif done_lessons > 0 or len(c_attempts) > 0:
+                    c_status = "IN_PROGRESS"
+                else:
+                    c_status = "NOT_STARTED"
+
+                timestamps = [a.completed_at for a in c_attempts]
+                if course.id in last_lesson_by_course:
+                    timestamps.append(last_lesson_by_course[course.id])
+                last_act = max(timestamps) if timestamps else None
+                pct = (
+                    round((done_lessons / total_lessons) * 100.0, 1)
+                    if total_lessons > 0
+                    else (100.0 if any_passed else 0.0)
+                )
+
+                course_progress.append(
+                    CourseProgressOverviewItem(
+                        course_id=course.id,
+                        completed_lessons=done_lessons,
+                        total_lessons=total_lessons,
+                        completion_percentage=pct,
+                        status=c_status,
+                        best_quiz_percentage=round(best_pct, 1) if best_pct is not None else None,
+                        last_activity_at=last_act,
+                    )
+                )
+
+            course_quiz_items = [
+                CourseQuizAttemptSummaryItem(
+                    attempt_id=a.id,
+                    quiz_id=a.quiz_id,
+                    quiz_title=quiz_map[a.quiz_id].title if a.quiz_id in quiz_map else "Quiz didattico",
+                    course_id=a.course_id,
+                    course_title=course_map[a.course_id].title if a.course_id in course_map else "Corso",
+                    lesson_id=quiz_map[a.quiz_id].lesson_id if a.quiz_id in quiz_map else None,
+                    percentage=round(a.percentage, 1),
+                    passed=a.passed,
+                    wrong_topics=list(a.wrong_topics or []),
+                    completed_at=a.completed_at,
+                )
+                for a in course_attempts
+            ]
+
+            cq_attempts = (
+                db.query(CustomQuizAttempt, CustomQuiz)
+                .join(CustomQuiz, CustomQuiz.id == CustomQuizAttempt.quiz_id)
+                .filter(CustomQuizAttempt.tenant_id == tenant_id, CustomQuizAttempt.user_id == user_id)
+                .order_by(CustomQuizAttempt.completed_at.desc())
+                .all()
+            )
+            custom_quiz_items = [
+                CustomQuizAttemptSummaryItem(
+                    attempt_id=att.id,
+                    quiz_id=att.quiz_id,
+                    software=cq.software,
+                    module_name=cq.module_name,
+                    topics_verified=list(cq.topics_verified or []),
+                    correct_count=att.correct_count,
+                    total_questions=att.total_questions,
+                    percentage=round(att.percentage, 1),
+                    outcome=att.outcome,
+                    duration_seconds=att.duration_seconds,
+                    completed_at=att.completed_at,
+                )
+                for att, cq in cq_attempts
+            ]
+
+            return UserLearningOverviewResponse(
+                user_id=user_id,
+                tenant_id=tenant_id,
+                completed_lesson_ids=completed_lesson_ids,
+                course_progress=course_progress,
+                course_quiz_attempts=course_quiz_items,
+                custom_quiz_attempts=custom_quiz_items,
+            )
 
     return router

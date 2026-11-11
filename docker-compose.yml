@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. MESSAGE BUS & STREAMING INGESTION (Kafka)
+  # ==========================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: rag-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: rag-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # ==========================================
+  # 2. DENSE VECTOR DATABASE CLUSTER (Qdrant)
+  # ==========================================
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    container_name: rag-qdrant
+    ports:
+      - "6333:6333" # HTTP REST API
+      - "6334:6334" # gRPC API
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__ENABLE_CORS: "true"
+      QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS: 16
+
+  # ==========================================
+  # 3. SPARSE / LEXICAL INVERTED INDEX (OpenSearch)
+  # ==========================================
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    container_name: rag-opensearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g"
+      - DISABLE_SECURITY_PLUGIN=true
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+
+  # ==========================================
+  # 4. MULTI-TIER CACHE (Redis)
+  # ==========================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: rag-redis-cache
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+
+  # ==========================================
+  # 5. RAG APPLICATION GATEWAY & INGESTION WORKERS
+  # ==========================================
+  rag-app:
+    build: .
+    container_name: enterprise-rag-app
+    depends_on:
+      - qdrant
+      - opensearch
+      - redis
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      QDRANT_URL: http://qdrant:6333
+      OPENSEARCH_URL: http://opensearch:9200
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+volumes:
+  qdrant_storage:
+  opensearch_data:

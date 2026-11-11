@@ -1,0 +1,209 @@
+"""Grounded answer generation with LangChain LCEL, citation mapping, and controlled fallback."""
+
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.output_parsers import StrOutputParser
+
+from operator_copilot.config.settings import Settings, get_settings
+from operator_copilot.generation.prompts import ABSTENTION_ANSWER, build_rag_prompt
+from operator_copilot.retrieval.retriever import RetrievedChunk
+from operator_copilot.schemas.response import SourceCitation
+
+logger = logging.getLogger("operator_copilot.generation.answer_generator")
+
+_ABSTENTION_MARKERS = (
+    "non contiene informazioni sufficienti",
+    "documentazione non è sufficiente",
+    "non dispongo di informazioni sufficienti",
+    "non ci sono evidenze sufficienti",
+)
+
+
+@dataclass
+class GenerationResult:
+    """Structured output returned by AnswerGenerator."""
+
+    answer: str
+    sources: list[SourceCitation]
+    needs_escalation: bool
+    abstention_reason: str | None = None
+    used_fallback: bool = False
+
+
+class AnswerGenerator:
+    """Generates strictly grounded Italian answers and real citations from retrieved chunks."""
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        llm: BaseChatModel | None = None,
+    ) -> None:
+        self.settings = settings or get_settings()
+        self._custom_llm = llm
+        self.prompt = build_rag_prompt()
+
+    def _build_llm(self) -> BaseChatModel | None:
+        """Instantiate configured LangChain ChatModel or return None for extractive mode."""
+        if self._custom_llm is not None:
+            return self._custom_llm
+
+        provider = self.settings.llm_provider
+        if provider == "extractive":
+            return None
+
+        api_key = self.settings.llm_api_key.get_secret_value() if self.settings.llm_api_key else ""
+
+        if provider in ("openai", "openai_compatible"):
+            if not api_key and not self.settings.llm_base_url:
+                logger.info("No LLM_API_KEY configured; falling back to grounded extractive generator.")
+                return None
+            from langchain_openai import ChatOpenAI
+
+            return ChatOpenAI(
+                model=self.settings.llm_model,
+                api_key=api_key or "not-required",
+                base_url=self.settings.llm_base_url or None,
+                temperature=self.settings.llm_temperature,
+                timeout=self.settings.llm_timeout_seconds,
+                max_retries=1,
+            )
+
+        if provider == "ollama":
+            from langchain_openai import ChatOpenAI
+
+            return ChatOpenAI(
+                model=self.settings.llm_model,
+                api_key="ollama",
+                base_url=self.settings.llm_base_url or "http://localhost:11434/v1",
+                temperature=self.settings.llm_temperature,
+                timeout=self.settings.llm_timeout_seconds,
+                max_retries=1,
+            )
+
+        return None
+
+    @staticmethod
+    def _sanitize_context_text(text: str) -> str:
+        """Neutralize delimiter tags inside documents to mitigate prompt injection."""
+        return text.replace("</retrieved_context>", "[/retrieved_context]").replace(
+            "<retrieved_context>", "[retrieved_context]"
+        )
+
+    @staticmethod
+    def build_citations(chunks: list[RetrievedChunk]) -> list[SourceCitation]:
+        """Build SourceCitation objects strictly from real chunk metadata."""
+        citations: list[SourceCitation] = []
+        seen_chunk_ids: set[str] = set()
+        for item in chunks:
+            meta = item.document.metadata
+            chunk_id = str(meta.get("chunk_id") or "")
+            if chunk_id in seen_chunk_ids:
+                continue
+            seen_chunk_ids.add(chunk_id)
+
+            doc_name = str(meta.get("source") or meta.get("filename") or meta.get("title") or "Documento sconosciuto")
+            section = str(meta.get("heading_path") or meta.get("section") or "")
+            raw_page = meta.get("page")
+            page = int(raw_page) if isinstance(raw_page, int) else None
+            area = str(meta["area_name"]) if meta.get("area_name") else None
+
+            citations.append(
+                SourceCitation(
+                    document=doc_name,
+                    section=section,
+                    page=page,
+                    chunk_id=chunk_id or "unknown_chunk",
+                    area=area,
+                    relevance_score=round(item.relevance_score, 4),
+                )
+            )
+        return citations
+
+    def _format_context(self, chunks: list[RetrievedChunk]) -> str:
+        blocks: list[str] = []
+        for idx, item in enumerate(chunks, start=1):
+            meta = item.document.metadata
+            source = meta.get("source", "unknown")
+            section = meta.get("heading_path", meta.get("section", ""))
+            chunk_id = meta.get("chunk_id", f"chunk_{idx}")
+            body = self._sanitize_context_text(item.document.page_content)
+            blocks.append(
+                f"--- FONTE {idx} (document={source} | section={section} | chunk_id={chunk_id}) ---\n{body}"
+            )
+        return "\n\n".join(blocks)
+
+    @staticmethod
+    def _strip_context_prefix(text: str) -> str:
+        """Remove internal chunk header prefix before presenting extractive snippets."""
+        return re.sub(r"^\[Area:[^\]]+\]\n", "", text).strip()
+
+    def _extractive_fallback(self, query: str, chunks: list[RetrievedChunk]) -> str:
+        """Produce a strictly grounded Italian procedural summary directly from retrieved chunks."""
+        lines = [
+            f'In base alla documentazione recuperata per "{query}", risultano rilevanti le seguenti indicazioni operative:\n'
+        ]
+        for idx, item in enumerate(chunks[:3], start=1):
+            meta = item.document.metadata
+            doc_label = meta.get("title") or meta.get("source", "Documento")
+            section = meta.get("heading_path") or meta.get("section") or ""
+            snippet = self._strip_context_prefix(item.document.page_content)
+            # Limit single snippet cleanly at sentence/line boundary
+            if len(snippet) > 650:
+                cut = snippet[:650].rfind("\n")
+                if cut < 250:
+                    cut = snippet[:650].rfind(". ")
+                snippet = snippet[: cut if cut > 200 else 650].strip() + "..."
+            lines.append(f"{idx}. **{doc_label}** (Sezione: *{section}*)\n{snippet}\n")
+
+        lines.append(
+            "Nota: sintesi estratta direttamente dai passaggi documentali recuperati senza elaborazione generativa esterna."
+        )
+        return "\n".join(lines)
+
+    def generate(self, query: str, chunks: list[RetrievedChunk]) -> GenerationResult:
+        """Generate grounded answer or abstain safely if evidence is missing."""
+        if not chunks:
+            return GenerationResult(
+                answer=ABSTENTION_ANSWER,
+                sources=[],
+                needs_escalation=True,
+                abstention_reason="Nessun documento sopra la soglia di rilevanza configurata.",
+            )
+
+        citations = self.build_citations(chunks)
+        llm = self._build_llm()
+
+        if llm is None:
+            answer = self._extractive_fallback(query, chunks)
+            return GenerationResult(
+                answer=answer,
+                sources=citations,
+                needs_escalation=False,
+                used_fallback=True,
+            )
+
+        context = self._format_context(chunks)
+        chain = self.prompt | llm | StrOutputParser()
+        try:
+            answer = chain.invoke({"query": query, "context": context}).strip()
+            needs_escalation = any(marker in answer.lower() for marker in _ABSTENTION_MARKERS)
+            return GenerationResult(
+                answer=answer,
+                sources=citations if not needs_escalation else citations,
+                needs_escalation=needs_escalation,
+                abstention_reason="Evidenza documentale giudicata insufficiente dal modello." if needs_escalation else None,
+            )
+        except Exception as exc:
+            logger.error("LLM provider error during generation (%s); using grounded fallback.", exc)
+            fallback_answer = self._extractive_fallback(query, chunks)
+            return GenerationResult(
+                answer=fallback_answer,
+                sources=citations,
+                needs_escalation=False,
+                used_fallback=True,
+            )

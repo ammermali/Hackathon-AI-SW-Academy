@@ -25,12 +25,19 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production", "test"] = "development"
 
     # LLM
-    llm_provider: Literal["openai", "openai_compatible", "ollama", "extractive"] = "openai"
-    llm_model: str = "gpt-4o-mini"
+    llm_provider: Literal["openai", "openai_compatible", "ollama", "extractive"] = "openai_compatible"
+    llm_model: str = "qwen2.5:7b-instruct"
+    llm_expected_model_family: str = "qwen"
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_timeout_seconds: int = Field(default=30, ge=1, le=300)
     llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+
+    # Knowledge-to-Course Engine
+    course_prompt_version: str = "academy-v1.0"
+    knowledge_obsolete_years: int = Field(default=4, ge=1, le=20)
+    pii_redact_before_llm: bool = True
+    analysis_max_workers: int = Field(default=2, ge=1, le=8)
 
     # Embeddings
     embedding_provider: Literal["huggingface", "openai", "hashing"] = "huggingface"

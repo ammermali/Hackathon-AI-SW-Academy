@@ -8,6 +8,7 @@ from functools import lru_cache
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 
 from operator_copilot import __version__
+from operator_copilot.api.academy_router import create_academy_router
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.retrieval.rag_engine import RAGEngine
 from operator_copilot.schemas.query import FeedbackRequest, IngestRequest, RAGQueryRequest
@@ -151,6 +152,14 @@ def create_app(engine: RAGEngine | None = None, settings: Settings | None = None
         rag: RAGEngine = Depends(get_rag_engine),
     ) -> IngestResponse:
         return rag.indexer.run_ingestion(rebuild=payload.rebuild, max_files=payload.max_files)
+
+    app.include_router(
+        create_academy_router(
+            get_rag_engine=get_rag_engine,
+            verify_admin_key=verify_admin_key,
+            settings=cfg,
+        )
+    )
 
     return app
 

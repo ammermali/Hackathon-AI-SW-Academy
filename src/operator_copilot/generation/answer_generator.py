@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
+from typing import Any, TypeVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.generation.prompts import ABSTENTION_ANSWER, build_rag_prompt
 from operator_copilot.retrieval.retriever import RetrievedChunk
 from operator_copilot.schemas.response import SourceCitation
+
+_T = TypeVar("_T", bound=BaseModel)
 
 logger = logging.getLogger("operator_copilot.generation.answer_generator")
 
@@ -87,12 +93,94 @@ class AnswerGenerator:
 
         return None
 
+    _CF_RE = re.compile(r"\b[A-Z]{6}\d{2}[A-EHLMPR-T]\d{2}[A-Z]\d{3}[A-Z]\b")
+    _IBAN_RE = re.compile(r"\bIT\d{2}[A-Z]\d{10}[0-9A-Z]{12}\b")
+    _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+
     @staticmethod
     def _sanitize_context_text(text: str) -> str:
         """Neutralize delimiter tags inside documents to mitigate prompt injection."""
         return text.replace("</retrieved_context>", "[/retrieved_context]").replace(
             "<retrieved_context>", "[retrieved_context]"
         )
+
+    @classmethod
+    def redact_pii(cls, text: str) -> str:
+        """Mask personal CF, IBAN, and personal-looking emails before external LLM calls."""
+        masked = cls._CF_RE.sub("[CF_PROTETTO]", text)
+        masked = cls._IBAN_RE.sub("[IBAN_PROTETTO]", masked)
+        # Preserve official palitalsoft support addresses mentioned in operational guides; mask other emails
+        def _mask_email(m: re.Match[str]) -> str:
+            val = m.group(0)
+            if val.lower().endswith("@palitalsoft.it") or val.lower().endswith("@palinformatica.it"):
+                return val
+            return "[EMAIL_PROTETTA]"
+        return cls._EMAIL_RE.sub(_mask_email, masked)
+
+    def get_model_info(self) -> dict[str, Any]:
+        """Return centralized model configuration and Qwen verification metadata."""
+        llm = self._build_llm()
+        configured_model = self.settings.llm_model
+        if self._custom_llm is not None:
+            custom_name = getattr(self._custom_llm, "model_name", None) or getattr(self._custom_llm, "model", None)
+            if isinstance(custom_name, str) and custom_name.strip():
+                configured_model = custom_name.strip()
+
+        expected = self.settings.llm_expected_model_family.lower()
+        is_qwen = expected in configured_model.lower()
+        return {
+            "provider": self.settings.llm_provider,
+            "configured_model": configured_model,
+            "expected_family": self.settings.llm_expected_model_family,
+            "is_qwen_configured": is_qwen,
+            "base_url": self.settings.llm_base_url or (
+                "http://localhost:11434/v1" if self.settings.llm_provider == "ollama" else None
+            ),
+            "llm_runtime_active": llm is not None,
+            "active_mode": "llm" if llm is not None else "deterministic_fallback",
+            "embedding_model": f"{self.settings.embedding_provider}:{self.settings.embedding_model}",
+        }
+
+    def invoke_structured(
+        self,
+        prompt_template: ChatPromptTemplate,
+        variables: dict[str, Any],
+        schema_cls: type[_T],
+    ) -> tuple[_T | None, bool, dict[str, Any]]:
+        """Invoke centralized LLM (Qwen) with structured Pydantic output and safe JSON fallback."""
+        model_info = self.get_model_info()
+        llm = self._build_llm()
+        if llm is None:
+            return None, False, model_info
+
+        safe_vars = dict(variables)
+        if "context" in safe_vars and isinstance(safe_vars["context"], str):
+            ctx = self._sanitize_context_text(safe_vars["context"])
+            if self.settings.pii_redact_before_llm:
+                ctx = self.redact_pii(ctx)
+            safe_vars["context"] = ctx
+
+        # 1. Try native structured output when supported by chat model
+        try:
+            structured_llm = llm.with_structured_output(schema_cls)
+            parsed = (prompt_template | structured_llm).invoke(safe_vars)
+            if isinstance(parsed, schema_cls):
+                return parsed, True, model_info
+            if isinstance(parsed, dict):
+                return schema_cls.model_validate(parsed), True, model_info
+        except Exception as exc:
+            logger.debug("with_structured_output unavailable/failed (%s); trying JSON text parse.", exc)
+
+        # 2. Fallback: raw text chain + JSON object extraction
+        try:
+            raw_text = (prompt_template | llm | StrOutputParser()).invoke(safe_vars).strip()
+            match = re.search(r"\{[\s\S]*\}", raw_text)
+            json_str = match.group(0) if match else raw_text
+            data = json.loads(json_str)
+            return schema_cls.model_validate(data), True, model_info
+        except Exception as exc:
+            logger.warning("Structured LLM invocation failed (%s); falling back to deterministic engine.", exc)
+            return None, False, model_info
 
     @staticmethod
     def build_citations(chunks: list[RetrievedChunk]) -> list[SourceCitation]:

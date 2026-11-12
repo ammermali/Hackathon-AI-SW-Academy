@@ -117,11 +117,3 @@ Per evitare duplicazioni tra database applicativo e vector store:
 
 Il modulo `history/` e `analytics/` salva per ogni interazione `user_id`, `topic` (derivato dall'area dei documenti recuperati), `intent` (`procedure`, `troubleshooting`, `navigation`, `comparison`, `general_info`), `needs_escalation` e `rating`.  
 L'endpoint `GET /api/v1/rag/history/{user_id}` restituisce già il raggruppamento per argomenti (`topics_summary`), mentre `GET /api/v1/rag/metrics` espone segnali pronti (`learning_readiness`) per generare quiz e percorsi adattivi nelle milestone successive senza assumere che ogni ricerca equivalga a una lacuna formativa.
-
----
-
-## 7. Evoluzione Milestone 2: AI Knowledge-to-Course Engine
-
-L'architettura sopra descritta è stata estesa nella **Milestone 2** integrando sulla stessa applicazione FastAPI (`/api/v1/academy/*`), sullo stesso DB SQLite e leggendo direttamente i chunk indicizzati in ChromaDB i moduli `knowledge_intelligence/` e `course_generator/`.
-
-Per tutti i dettagli architetturali, lo schema delle 13 nuove tabelle, gli endpoint Academy e il modello Qwen centralizzato, vedere [`docs/MILESTONE_2_KNOWLEDGE_TO_COURSE.md`](MILESTONE_2_KNOWLEDGE_TO_COURSE.md).

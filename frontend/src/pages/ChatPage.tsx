@@ -44,6 +44,14 @@ export function ChatPage({ embedded = true }: ChatPageProps) {
   const activeConv = conversations.find((c) => c.sessionId === activeSessionId);
   const headerTitle = activeConv?.title ?? "Nuova conversazione";
 
+  const handleToggleSidebar = () => {
+    if (window.innerWidth <= 900) {
+      setIsMobileSidebarOpen((prev) => !prev);
+    } else {
+      setIsSidebarCollapsed((prev) => !prev);
+    }
+  };
+
   return (
     <div className={embedded ? "assistant-workspace" : "app-shell"}>
       <Sidebar
@@ -55,7 +63,6 @@ export function ChatPage({ embedded = true }: ChatPageProps) {
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileSidebarOpen}
         embedded={embedded}
-        onCollapseDesktop={() => setIsSidebarCollapsed(true)}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onNewConversation={startNewConversation}
         onSelectConversation={selectConversation}
@@ -68,10 +75,8 @@ export function ChatPage({ embedded = true }: ChatPageProps) {
           title={headerTitle}
           sessionId={activeSessionId}
           backendStatus={backendStatus}
-          isSidebarCollapsed={isSidebarCollapsed}
           embedded={embedded}
-          onToggleDesktopSidebar={() => setIsSidebarCollapsed(false)}
-          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          onToggleSidebar={handleToggleSidebar}
           onRefreshHealth={() => void refreshHealth()}
         />
 

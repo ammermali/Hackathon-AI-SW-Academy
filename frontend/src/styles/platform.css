@@ -350,6 +350,19 @@
   border-right: 1px solid var(--border-light);
 }
 
+.assistant-workspace .sidebar.sidebar-collapsed {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-right: none;
+}
+
+@media (max-width: 900px) {
+  .assistant-workspace .sidebar.sidebar-collapsed {
+    width: min(84vw, 300px);
+  }
+}
+
 .assistant-workspace .sidebar-top {
   border-bottom: 1px solid var(--border-light);
 }
@@ -1641,5 +1654,51 @@
   font-size: 0.86rem;
   font-weight: 500;
 }
+
+.role-chip-knowledge_manager {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.kb-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1.25rem;
+  border: 2px dashed var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.kb-dropzone:hover,
+.kb-dropzone:focus-visible,
+.kb-dropzone-active {
+  border-color: var(--accent-primary);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  outline: none;
+}
+
+.kb-preview-box {
+  margin: 0;
+  padding: 1rem;
+  max-height: 440px;
+  overflow: auto;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: #f8fafc;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 
 

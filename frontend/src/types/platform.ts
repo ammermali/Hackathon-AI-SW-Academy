@@ -579,3 +579,67 @@ export interface LessonUpdatePayload {
   summary?: string;
   change_summary?: string;
 }
+
+export interface KnowledgeDocumentListItem {
+  document_id: string;
+  filename: string;
+  relative_path: string;
+  area: string;
+  extension: string;
+  size_bytes: number;
+  status: string;
+  chunk_count: number;
+  updated_at: string;
+  indexed_at: string | null;
+}
+
+export interface KnowledgeDocumentsPage {
+  total: number;
+  page: number;
+  page_size: number;
+  indexed_total: number;
+  total_chunks: number;
+  areas: string[];
+  extensions: string[];
+  supported_extensions: string[];
+  items: KnowledgeDocumentListItem[];
+}
+
+export interface KnowledgeDocumentContent {
+  document_id: string;
+  filename: string;
+  relative_path: string;
+  area: string;
+  extension: string;
+  size_bytes: number;
+  content: string;
+  truncated: boolean;
+}
+
+export interface KnowledgeUploadFileOutcome {
+  filename: string;
+  relative_path: string;
+  status: "uploaded" | "overwritten" | "skipped_exists" | "rejected";
+  detail: string;
+  size_bytes: number;
+}
+
+export interface KnowledgeIngestSummary {
+  status: string;
+  corpus_version: string;
+  files_scanned: number;
+  files_indexed: number;
+  files_skipped_unchanged: number;
+  files_skipped_duplicate: number;
+  files_failed: number;
+  chunks_created: number;
+  processing_time_ms: number;
+}
+
+export interface KnowledgeUploadResponse {
+  uploaded_count: number;
+  skipped_count: number;
+  rejected_count: number;
+  results: KnowledgeUploadFileOutcome[];
+  ingest: KnowledgeIngestSummary | null;
+}

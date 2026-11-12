@@ -528,4 +528,96 @@ def test_owner_users_counts_lesson_completed_courses_and_quiz_returns_feedback(t
     assert all(fb["correct_answer"] for fb in body["question_feedback"])
 
 
+def test_knowledge_manager_rbac_list_preview_and_upload_ingest(tmp_path: Path) -> None:
+    rag, client, _cid, _lid = _setup_demo_app(tmp_path)
+
+    with rag.db.session() as db:
+        db.add(
+            OrganizationUser(
+                id=f"orgu_{uuid.uuid4().hex[:8]}",
+                tenant_id="tenant_alfa",
+                user_id="km_paolo",
+                display_name="Paolo Ferri (Knowledge Manager)",
+                amministrazione="Comune Alfa",
+                role="knowledge_manager",
+            )
+        )
+        db.commit()
+
+    op_token = client.post(
+        "/api/v1/demo/switch-user",
+        json={"user_id": "op_maria"},
+        headers={"X-Tenant-ID": "tenant_alfa"},
+    ).json()["token"]
+    own_token = client.post(
+        "/api/v1/demo/switch-user",
+        json={"user_id": "owner_alfa"},
+        headers={"X-Tenant-ID": "tenant_alfa"},
+    ).json()["token"]
+    km_token = client.post(
+        "/api/v1/demo/switch-user",
+        json={"user_id": "km_paolo"},
+        headers={"X-Tenant-ID": "tenant_alfa"},
+    ).json()["token"]
+
+    # Operator and Owner cannot access Knowledge Base management endpoints
+    assert (
+        client.get(
+            "/api/v1/knowledge/documents",
+            headers={"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": op_token},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(
+            "/api/v1/knowledge/documents",
+            headers={"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": own_token},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            "/api/v1/knowledge/upload",
+            files={"files": ("test.md", b"# Test\nContenuto", "text/markdown")},
+            headers={"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": op_token},
+        ).status_code
+        == 403
+    )
+
+    km_headers = {"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": km_token}
+    list_before = client.get("/api/v1/knowledge/documents", headers=km_headers)
+    assert list_before.status_code == 200
+    assert list_before.json()["total"] >= 1
+
+    # Upload new document with path-traversal attempt in area/filename -> safely sanitized inside data_dir
+    upload_resp = client.post(
+        "/api/v1/knowledge/upload",
+        data={"area": "../99 - Nuova Procedura", "overwrite": "false"},
+        files=[
+            ("files", ("../../nuovo_protocollo_pec.md", "# Invio PEC Protocollo\nPer inviare una PEC dal modulo Protocollo usare il pulsante Inoltra PEC.".encode("utf-8"), "text/markdown")),
+            ("files", ("archivio.exe", b"binary", "application/octet-stream")),
+        ],
+        headers=km_headers,
+    )
+    assert upload_resp.status_code == 200
+    up = upload_resp.json()
+    assert up["uploaded_count"] == 1
+    assert up["rejected_count"] == 1
+    assert up["ingest"] is not None
+    assert up["ingest"]["files_indexed"] >= 1
+
+    # New document appears in KB list and preview returns its content
+    list_after = client.get("/api/v1/knowledge/documents?search=nuovo_protocollo_pec", headers=km_headers)
+    assert list_after.status_code == 200
+    items = list_after.json()["items"]
+    assert len(items) == 1
+    doc_id = items[0]["document_id"]
+    assert "99 - Nuova Procedura" in items[0]["area"]
+
+    preview_resp = client.get(f"/api/v1/knowledge/documents/{doc_id}/content", headers=km_headers)
+    assert preview_resp.status_code == 200
+    assert "Inoltra PEC" in preview_resp.json()["content"]
+
+
+
 

@@ -4,7 +4,12 @@ import { LoadingState } from "./components/common/PlatformPrimitives";
 import { AppLayout } from "./components/layout/AppLayout";
 import { AuthProvider } from "./context/AuthContext";
 import { ChatPage } from "./pages/ChatPage";
+import { KnowledgeManagerRoute } from "./pages/knowledge/KnowledgeManagerRoute";
 import { OwnerRoute } from "./pages/owner/OwnerRoute";
+
+const KnowledgeBasePage = lazy(() =>
+  import("./pages/knowledge/KnowledgeBasePage").then((m) => ({ default: m.KnowledgeBasePage }))
+);
 
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const LearningAreaPage = lazy(() =>
@@ -110,6 +115,16 @@ export function AppRoutes() {
                 <OwnerTopicsPage />
               </Suspense>
             </OwnerRoute>
+          }
+        />
+        <Route
+          path="knowledge-base"
+          element={
+            <KnowledgeManagerRoute>
+              <Suspense fallback={<RouteFallback />}>
+                <KnowledgeBasePage />
+              </Suspense>
+            </KnowledgeManagerRoute>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

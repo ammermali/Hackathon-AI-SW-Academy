@@ -1,14 +1,12 @@
-import { Menu, PanelLeftOpen, RefreshCw } from "lucide-react";
+import { PanelLeft, RefreshCw } from "lucide-react";
 import type { BackendStatus } from "../types/rag";
 
 interface ChatHeaderProps {
   title: string;
   sessionId: string;
   backendStatus: BackendStatus;
-  isSidebarCollapsed: boolean;
   embedded?: boolean;
-  onToggleDesktopSidebar: () => void;
-  onOpenMobileSidebar: () => void;
+  onToggleSidebar: () => void;
   onRefreshHealth: () => void;
 }
 
@@ -16,10 +14,8 @@ export function ChatHeader({
   title,
   sessionId,
   backendStatus,
-  isSidebarCollapsed,
   embedded = false,
-  onToggleDesktopSidebar,
-  onOpenMobileSidebar,
+  onToggleSidebar,
   onRefreshHealth,
 }: ChatHeaderProps) {
   const statusLabel =
@@ -34,24 +30,13 @@ export function ChatHeader({
       <div className="chat-header-left">
         <button
           type="button"
-          className="icon-button mobile-only"
-          onClick={onOpenMobileSidebar}
-          aria-label="Apri menu conversazioni"
+          className="icon-button"
+          onClick={onToggleSidebar}
+          aria-label="Mostra o nascondi elenco conversazioni"
+          title="Mostra o nascondi conversazioni"
         >
-          <Menu size={20} />
+          <PanelLeft size={19} />
         </button>
-
-        {isSidebarCollapsed && (
-          <button
-            type="button"
-            className="icon-button desktop-only"
-            onClick={onToggleDesktopSidebar}
-            aria-label="Espandi barra laterale"
-            title="Mostra barra laterale"
-          >
-            <PanelLeftOpen size={19} />
-          </button>
-        )}
 
         <div className="chat-header-title-group">
           <h2 className="chat-header-title">{title}</h2>

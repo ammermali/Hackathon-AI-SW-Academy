@@ -28,6 +28,12 @@ DEMO_DIRECTORY = [
         "amministrazione": "Ente Pilota PA",
         "role": "owner",
     },
+    {
+        "user_id": "km_paolo",
+        "display_name": "Paolo Ferri (Knowledge Manager)",
+        "amministrazione": "Ente Pilota PA",
+        "role": "knowledge_manager",
+    },
 ]
 
 

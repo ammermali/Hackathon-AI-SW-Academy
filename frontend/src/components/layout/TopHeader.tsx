@@ -1,18 +1,12 @@
-import { Building2, Cpu, Menu, PanelLeftOpen, RefreshCw, ShieldCheck } from "lucide-react";
+import { Building2, Cpu, Menu, RefreshCw, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { DemoUserSwitcher } from "./DemoUserSwitcher";
 
 interface TopHeaderProps {
-  isSidebarCollapsed: boolean;
-  onToggleDesktopSidebar: () => void;
-  onOpenMobileSidebar: () => void;
+  onToggleSidebar: () => void;
 }
 
-export function TopHeader({
-  isSidebarCollapsed,
-  onToggleDesktopSidebar,
-  onOpenMobileSidebar,
-}: TopHeaderProps) {
+export function TopHeader({ onToggleSidebar }: TopHeaderProps) {
   const { user, backendStatus, refreshHealth } = useAuth();
 
   const statusLabel =
@@ -27,24 +21,13 @@ export function TopHeader({
       <div className="top-header-left">
         <button
           type="button"
-          className="icon-button mobile-only"
-          onClick={onOpenMobileSidebar}
-          aria-label="Apri menu navigazione"
+          className="icon-button"
+          onClick={onToggleSidebar}
+          aria-label="Apri o chiudi menu navigazione"
+          title="Mostra o nascondi menu"
         >
           <Menu size={20} />
         </button>
-
-        {isSidebarCollapsed && (
-          <button
-            type="button"
-            className="icon-button desktop-only"
-            onClick={onToggleDesktopSidebar}
-            aria-label="Espandi menu laterale"
-            title="Mostra barra laterale"
-          >
-            <PanelLeftOpen size={19} />
-          </button>
-        )}
 
         <div className="user-identity-strip">
           <div className="identity-avatar" aria-hidden="true">

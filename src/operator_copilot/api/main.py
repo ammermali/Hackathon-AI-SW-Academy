@@ -12,6 +12,7 @@ from operator_copilot import __version__
 from operator_copilot.api.academy_router import create_academy_router
 from operator_copilot.api.customquiz_router import create_customquiz_router
 from operator_copilot.api.demo_router import create_demo_router
+from operator_copilot.api.knowledge_router import create_knowledge_router
 from operator_copilot.api.owner_router import create_owner_router
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.retrieval.rag_engine import RAGEngine
@@ -187,6 +188,12 @@ def create_app(engine: RAGEngine | None = None, settings: Settings | None = None
     )
     app.include_router(
         create_demo_router(
+            get_rag_engine=get_rag_engine,
+            settings=cfg,
+        )
+    )
+    app.include_router(
+        create_knowledge_router(
             get_rag_engine=get_rag_engine,
             settings=cfg,
         )

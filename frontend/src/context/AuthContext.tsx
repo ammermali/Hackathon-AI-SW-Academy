@@ -33,6 +33,7 @@ interface AuthContextValue {
   switchUser: (targetUserId: string) => Promise<void>;
   clearSwitchError: () => void;
   isOwner: boolean;
+  isKnowledgeManager: boolean;
 }
 
 const DEFAULT_SESSION: ActiveUserSession = {
@@ -196,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchUser,
         clearSwitchError: () => setSwitchError(null),
         isOwner: user.role === "owner",
+        isKnowledgeManager: user.role === "knowledge_manager",
       }}
     >
       {children}

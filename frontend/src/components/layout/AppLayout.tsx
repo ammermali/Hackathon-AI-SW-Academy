@@ -6,34 +6,40 @@ import { PlatformSidebar } from "./PlatformSidebar";
 import { TopHeader } from "./TopHeader";
 
 export function AppLayout() {
-  const { isOwner, switchError, clearSwitchError } = useAuth();
+  const { isOwner, isKnowledgeManager, switchError, clearSwitchError } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Safely leave Owner routes when switching to a non-Owner profile in Demo Mode
+  // Safely leave Owner or Knowledge Manager routes when switching profile in Demo Mode
   useEffect(() => {
     if (!isOwner && location.pathname.startsWith("/owner")) {
       navigate("/", { replace: true });
     }
-  }, [isOwner, location.pathname, navigate]);
+    if (!isKnowledgeManager && location.pathname.startsWith("/knowledge-base")) {
+      navigate("/", { replace: true });
+    }
+  }, [isKnowledgeManager, isOwner, location.pathname, navigate]);
+
+  const handleToggleSidebar = () => {
+    if (window.innerWidth <= 768) {
+      setIsMobileSidebarOpen((prev) => !prev);
+    } else {
+      setIsSidebarCollapsed((prev) => !prev);
+    }
+  };
 
   return (
     <div className="platform-shell">
       <PlatformSidebar
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileSidebarOpen}
-        onCollapseDesktop={() => setIsSidebarCollapsed(true)}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       <div className="platform-workspace">
-        <TopHeader
-          isSidebarCollapsed={isSidebarCollapsed}
-          onToggleDesktopSidebar={() => setIsSidebarCollapsed(false)}
-          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-        />
+        <TopHeader onToggleSidebar={handleToggleSidebar} />
 
         {switchError && (
           <div className="global-error-banner" role="alert">

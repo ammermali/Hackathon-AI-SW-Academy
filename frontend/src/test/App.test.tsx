@@ -854,4 +854,120 @@ describe("AI Software Academy — Milestone UI 2 Platform & RAG", () => {
     await user.click(screen.getByRole("button", { name: /Salva modifiche corso/i }));
     expect(await screen.findByRole("heading", { name: "Corso Ticket Aggiornato" })).toBeInTheDocument();
   });
+
+  it("gates Knowledge Base management to knowledge_manager role and supports file upload", async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/health")) {
+        return mockJsonResponse({ status: "ok", version: "0.1.0", corpus_version: "v1" });
+      }
+      if (url.endsWith("/api/v1/demo/status")) {
+        return mockJsonResponse({ demo_mode_enabled: true, app_env: "development" });
+      }
+      if (url.endsWith("/api/v1/demo/users")) {
+        return mockJsonResponse([
+          {
+            user_id: "operatore_01",
+            display_name: "Maria Rossi",
+            amministrazione: "Comune di Rimini",
+            role: "operatore",
+            softwares_used: [],
+            has_activity: true,
+          },
+          {
+            user_id: "km_paolo",
+            display_name: "Paolo Ferri (Knowledge Manager)",
+            amministrazione: "Ente Pilota PA",
+            role: "knowledge_manager",
+            softwares_used: [],
+            has_activity: false,
+          },
+        ]);
+      }
+      if (url.endsWith("/api/v1/demo/switch-user")) {
+        return mockJsonResponse({
+          token: "tok-km",
+          tenant_id: "default",
+          is_demo: true,
+          expires_at: 9999999999,
+          user: {
+            user_id: "km_paolo",
+            display_name: "Paolo Ferri (Knowledge Manager)",
+            amministrazione: "Ente Pilota PA",
+            role: "knowledge_manager",
+            softwares_used: [],
+            has_activity: false,
+          },
+        });
+      }
+      if (url.includes("/api/v1/rag/documents")) {
+        return mockJsonResponse([
+          {
+            document_id: "doc_1",
+            source: "01 - Generali/manuale_base.md",
+            document_type: "manual",
+            area_name: "01 - Generali",
+            file_hash: "abc123",
+            chunk_count: 3,
+            status: "indexed",
+            indexed_at: "2026-11-12T08:00:00Z",
+            updated_at: "2026-11-12T08:00:00Z",
+          },
+        ]);
+      }
+      if (url.endsWith("/api/v1/knowledge/upload")) {
+        return mockJsonResponse({
+          uploaded_count: 1,
+          skipped_count: 0,
+          rejected_count: 0,
+          results: [
+            {
+              filename: "nuova_guida.md",
+              relative_path: "01 - Generali/nuova_guida.md",
+              status: "uploaded",
+              detail: "File salvato e pronto per l'indicizzazione.",
+              size_bytes: 24,
+            },
+          ],
+          ingest: {
+            status: "completed",
+            corpus_version: "v2",
+            files_scanned: 2,
+            files_indexed: 1,
+            files_skipped_unchanged: 1,
+            files_skipped_duplicate: 0,
+            files_failed: 0,
+            chunks_created: 2,
+            processing_time_ms: 42,
+          },
+        });
+      }
+      return mockJsonResponse({}, 404);
+    });
+
+    renderAt("/knowledge-base");
+    // Redirected away from /knowledge-base and Gestione KB nav is hidden for operatore
+    expect(screen.queryByRole("link", { name: "Gestione KB" })).not.toBeInTheDocument();
+
+    // Switch to Paolo Ferri (Knowledge Manager)
+    await user.click(await screen.findByRole("button", { name: /DEMO/i }));
+    await user.click(await screen.findByRole("option", { name: /Paolo Ferri \(Knowledge Manager\)/i }));
+
+    const kbLink = await screen.findByRole("link", { name: "Gestione KB" });
+    await user.click(kbLink);
+    expect(await screen.findByRole("heading", { name: /Knowledge Base & Ingestion/i })).toBeInTheDocument();
+    expect(await screen.findByText("manuale_base.md")).toBeInTheDocument();
+
+    // Select a file via file input and upload + ingest
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const newFile = new File(["# Nuova guida\nContenuto"], "nuova_guida.md", { type: "text/markdown" });
+    await user.upload(fileInput, newFile);
+
+    const uploadBtn = await screen.findByRole("button", { name: /Carica e indicizza \(1\)/i });
+    await user.click(uploadBtn);
+
+    expect(await screen.findByText(/Caricati: 1/i)).toBeInTheDocument();
+  });
 });

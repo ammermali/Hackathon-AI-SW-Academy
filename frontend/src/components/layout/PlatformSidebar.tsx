@@ -4,30 +4,27 @@ import {
   BarChart3,
   BookOpen,
   Bot,
+  Database,
   GraduationCap,
   Home,
   LayoutDashboard,
   ListChecks,
-  PanelLeftClose,
   Users,
-  X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 interface PlatformSidebarProps {
   isCollapsed: boolean;
   isMobileOpen: boolean;
-  onCollapseDesktop: () => void;
   onCloseMobile: () => void;
 }
 
 export function PlatformSidebar({
   isCollapsed,
   isMobileOpen,
-  onCollapseDesktop,
   onCloseMobile,
 }: PlatformSidebarProps) {
-  const { isOwner } = useAuth();
+  const { isOwner, isKnowledgeManager } = useAuth();
 
   const mainNav = [
     { to: "/", label: "Home", icon: Home, end: true },
@@ -63,25 +60,6 @@ export function PlatformSidebar({
               <div className="brand-sub">Formazione PA &amp; RAG</div>
             </div>
           </div>
-
-          <button
-            type="button"
-            className="icon-button desktop-only"
-            onClick={onCollapseDesktop}
-            aria-label="Comprimi menu laterale"
-            title="Comprimi barra laterale"
-          >
-            <PanelLeftClose size={18} />
-          </button>
-
-          <button
-            type="button"
-            className="icon-button mobile-only"
-            onClick={onCloseMobile}
-            aria-label="Chiudi menu"
-          >
-            <X size={19} />
-          </button>
         </div>
 
         <nav className="platform-nav" aria-label="Menu principale">
@@ -104,6 +82,24 @@ export function PlatformSidebar({
               );
             })}
           </ul>
+
+          {isKnowledgeManager && (
+            <>
+              <div className="nav-group-label">Knowledge Base</div>
+              <ul>
+                <li>
+                  <NavLink
+                    to="/knowledge-base"
+                    onClick={onCloseMobile}
+                    className={({ isActive }) => `nav-link-item ${isActive ? "nav-link-active" : ""}`}
+                  >
+                    <Database size={17} aria-hidden="true" />
+                    <span>Gestione KB</span>
+                  </NavLink>
+                </li>
+              </ul>
+            </>
+          )}
 
           {isOwner && (
             <>

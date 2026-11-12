@@ -187,3 +187,49 @@ def build_owner_context_dependency(settings: Settings) -> Callable[..., dict[str
         }
 
     return get_owner_context
+
+
+def build_knowledge_manager_context_dependency(settings: Settings) -> Callable[..., dict[str, str]]:
+    """Enforce Knowledge Manager role access via signed Demo Token or X-Admin-Key."""
+
+    def get_knowledge_manager_context(
+        x_tenant_id: str = Header(default="default", alias="X-Tenant-ID"),
+        x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+        x_demo_token: str | None = Header(default=None, alias="X-Demo-Token"),
+        x_user_id: str = Header(default="anonymous", alias="X-User-ID"),
+    ) -> dict[str, str]:
+        tenant_id = x_tenant_id.strip() or "default"
+        if x_admin_key:
+            expected = settings.admin_api_key.get_secret_value()
+            if secrets.compare_digest(x_admin_key, expected):
+                return {
+                    "tenant_id": tenant_id,
+                    "role": "admin",
+                    "user_id": x_user_id.strip() or "admin",
+                }
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Header X-Admin-Key non valido.",
+            )
+
+        if x_demo_token:
+            claims = verify_demo_token(settings, x_demo_token, expected_tenant=tenant_id)
+            demo_role = str(claims.get("role") or "operatore").strip().lower()
+            demo_uid = str(claims.get("user_id") or "anonymous").strip()
+            if demo_role not in {"knowledge_manager", "admin"} or demo_uid == "anonymous":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Accesso riservato al ruolo 'knowledge_manager'.",
+                )
+            return {
+                "tenant_id": tenant_id,
+                "role": demo_role,
+                "user_id": demo_uid,
+            }
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accesso riservato al ruolo 'knowledge_manager' autenticato.",
+        )
+
+    return get_knowledge_manager_context

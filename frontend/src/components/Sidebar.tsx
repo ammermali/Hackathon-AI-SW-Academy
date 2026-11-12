@@ -2,11 +2,9 @@ import { useState, type FormEvent } from "react";
 import {
   GraduationCap,
   MessageSquare,
-  PanelLeftClose,
   Plus,
   Trash2,
   UserCheck,
-  X,
 } from "lucide-react";
 import type { ConversationSummary } from "../types/rag";
 
@@ -19,7 +17,6 @@ interface SidebarProps {
   isCollapsed: boolean;
   isMobileOpen: boolean;
   embedded?: boolean;
-  onCollapseDesktop: () => void;
   onCloseMobile: () => void;
   onNewConversation: () => void;
   onSelectConversation: (sessionId: string) => void;
@@ -42,7 +39,6 @@ export function Sidebar({
   isCollapsed,
   isMobileOpen,
   embedded = false,
-  onCollapseDesktop,
   onCloseMobile,
   onNewConversation,
   onSelectConversation,
@@ -99,25 +95,6 @@ export function Sidebar({
               </div>
             </div>
           )}
-
-          <button
-            type="button"
-            className="icon-button desktop-only"
-            onClick={onCollapseDesktop}
-            aria-label="Comprimi barra laterale"
-            title="Comprimi barra laterale"
-          >
-            <PanelLeftClose size={18} />
-          </button>
-
-          <button
-            type="button"
-            className="icon-button mobile-only"
-            onClick={onCloseMobile}
-            aria-label="Chiudi menu"
-          >
-            <X size={19} />
-          </button>
         </div>
 
         <div className="sidebar-actions">

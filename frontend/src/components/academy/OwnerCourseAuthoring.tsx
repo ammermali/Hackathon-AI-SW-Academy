@@ -28,7 +28,7 @@ export function OwnerCourseAuthoringBar({
   const [description, setDescription] = useState(course.description);
   const [summary, setSummary] = useState(course.summary);
   const [difficulty, setDifficulty] = useState(course.difficulty);
-  const [changeSummary, setChangeSummary] = useState("Aggiornamento manuale Owner");
+  const [changeSummary, setChangeSummary] = useState("Aggiornamento manuale Learning Manager");
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export function OwnerCourseAuthoringBar({
         description: description.trim(),
         summary: summary.trim(),
         difficulty,
-        change_summary: changeSummary.trim() || "Aggiornamento manuale Owner",
+        change_summary: changeSummary.trim() || "Aggiornamento manuale Learning Manager",
       });
       setIsEditingCourse(false);
       onCourseUpdated(updated, "Metadati del corso aggiornati e nuova revisione salvata.");
@@ -70,7 +70,7 @@ export function OwnerCourseAuthoringBar({
         authContext,
         course.id,
         targetStatus,
-        `Azione Owner da UI: ${label}`
+        `Azione Learning Manager da UI: ${label}`
       );
       onCourseUpdated(updated, `Stato del corso aggiornato a ${updated.lifecycle_status}.`);
     } catch (err) {
@@ -94,10 +94,10 @@ export function OwnerCourseAuthoringBar({
   };
 
   return (
-    <section className="panel-card owner-authoring-bar" aria-label="Strumenti Owner gestione corso">
+    <section className="panel-card owner-authoring-bar" aria-label="Strumenti Learning Manager gestione corso">
       <div className="owner-authoring-bar-row">
         <div className="owner-authoring-bar-info">
-          <StatusBadge tone="info">Gestione Owner • v{course.current_version}</StatusBadge>
+          <StatusBadge tone="info">Gestione Learning Manager • v{course.current_version}</StatusBadge>
           <span className="muted-meta">
             Puoi modificare titolo, lezioni, rigenerare contenuti con RAG o gestire la pubblicazione.
           </span>
@@ -267,7 +267,7 @@ export function OwnerLessonEditor({
   const [explanation, setExplanation] = useState(lesson.explanation);
   const [proceduresText, setProceduresText] = useState(lesson.procedures.join("\n"));
   const [summary, setSummary] = useState(lesson.summary);
-  const [changeSummary, setChangeSummary] = useState("Modifica manuale lezione (Owner)");
+  const [changeSummary, setChangeSummary] = useState("Modifica manuale lezione (Learning Manager)");
   const [busyMode, setBusyMode] = useState<"save" | "regen" | null>(null);
 
   useEffect(() => {
@@ -294,7 +294,7 @@ export function OwnerLessonEditor({
         explanation: explanation.trim(),
         procedures,
         summary: summary.trim(),
-        change_summary: changeSummary.trim() || "Modifica manuale lezione (Owner)",
+        change_summary: changeSummary.trim() || "Modifica manuale lezione (Learning Manager)",
       });
       setIsOpen(false);
       onLessonUpdated(updated, "Lezione aggiornata e salvata come nuova revisione.");

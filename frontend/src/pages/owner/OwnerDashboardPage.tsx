@@ -111,21 +111,21 @@ export function OwnerDashboardPage() {
       <div className="page-header">
         <div>
           <div className="hero-eyebrow">
-            <span>Owner Area • Governance Formativa</span>
+            <span>Area Learning Manager • Governance Formativa</span>
           </div>
-          <h1>Owner Learning Dashboard</h1>
+          <h1>Dashboard Learning Manager</h1>
           <p>
-            Monitoraggio aggregato dell&apos;apprendimento, performance Custom Quiz e criticità
+            Monitoraggio aggregato dell&apos;apprendimento, performance quiz personalizzati e criticità
             organizzative.
           </p>
         </div>
 
         <div className="header-actions-row">
           <Link to="/owner/users" className="btn btn-secondary">
-            Users Analytics
+            Analisi utenti
           </Link>
           <Link to="/owner/topics" className="btn btn-secondary">
-            Topics to Review
+            Argomenti da rivedere
           </Link>
           <button
             type="button"
@@ -228,7 +228,7 @@ export function OwnerDashboardPage() {
             {customAnalytics && (
               <section className="panel-card">
                 <div className="panel-card-header">
-                  <h2>Performance Custom Quiz Adattivi</h2>
+                  <h2>Performance quiz personalizzati adattivi</h2>
                   <StatusBadge tone="info">
                     {customAnalytics.total_completed}/{customAnalytics.total_generated} completati
                   </StatusBadge>

@@ -11,7 +11,7 @@ export function TopHeader({ onToggleSidebar }: TopHeaderProps) {
 
   const statusLabel =
     backendStatus === "online"
-      ? "RAG Connesso"
+      ? "Connesso"
       : backendStatus === "offline"
         ? "Offline"
         : "Verifica...";

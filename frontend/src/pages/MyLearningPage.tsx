@@ -191,15 +191,15 @@ export function MyLearningPage() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>My Learning</h1>
+          <h1>La mia formazione</h1>
           <p>
-            Gestisci i tuoi corsi, consulta lo storico dei quiz didattici e genera Custom Quiz
+            Gestisci i tuoi corsi, consulta lo storico dei quiz didattici e genera quiz personalizzati
             adattivi sulle tue lacune.
           </p>
         </div>
       </div>
 
-      <div className="tabs-row" role="tablist" aria-label="Sezioni My Learning">
+      <div className="tabs-row" role="tablist" aria-label="Sezioni La mia formazione">
         <button
           type="button"
           role="tab"
@@ -208,7 +208,7 @@ export function MyLearningPage() {
           onClick={() => setActiveTab("courses")}
         >
           <BookOpen size={15} />
-          <span>My Courses ({courses.length})</span>
+          <span>I miei corsi ({courses.length})</span>
         </button>
         <button
           type="button"
@@ -218,7 +218,7 @@ export function MyLearningPage() {
           onClick={() => setActiveTab("quizzes")}
         >
           <ClipboardCheck size={15} />
-          <span>My Quizzes ({overview?.course_quiz_attempts.length ?? 0})</span>
+          <span>I miei quiz ({overview?.course_quiz_attempts.length ?? 0})</span>
         </button>
         <button
           type="button"
@@ -228,7 +228,7 @@ export function MyLearningPage() {
           onClick={() => setActiveTab("custom")}
         >
           <Sparkles size={15} />
-          <span>My Custom Quizzes ({customQuizzes.length})</span>
+          <span>I miei quiz personalizzati ({customQuizzes.length})</span>
         </button>
       </div>
 
@@ -292,7 +292,7 @@ export function MyLearningPage() {
             <div className="empty-card">
               <p>Non hai ancora completato quiz didattici nei corsi.</p>
               <Link to="/learning" className="btn btn-primary btn-sm">
-                Vai al Learning Area
+                Vai all&apos;Area Formazione
               </Link>
             </div>
           ) : (
@@ -341,10 +341,10 @@ export function MyLearningPage() {
       ) : (
         <div className="stack-lg">
           {runnerQuiz && (
-            <section className="panel-card custom-quiz-runner-card" aria-label="Custom Quiz Runner">
+            <section className="panel-card custom-quiz-runner-card" aria-label="Svolgimento quiz personalizzato">
               <div className="runner-header">
                 <div>
-                  <StatusBadge tone="info">Custom Quiz Adattivo</StatusBadge>
+                  <StatusBadge tone="info">Quiz personalizzato adattivo</StatusBadge>
                   <h2>
                     {runnerQuiz.software} • {runnerQuiz.module_name}
                   </h2>
@@ -508,13 +508,13 @@ export function MyLearningPage() {
                   </div>
                 </div>
               ) : (
-                <p>Nessuna domanda disponibile per questo Custom Quiz.</p>
+                <p>Nessuna domanda disponibile per questo quiz personalizzato.</p>
               )}
             </section>
           )}
 
           <section className="panel-card">
-            <h2 className="section-heading">Genera un nuovo Custom Quiz (Qwen)</h2>
+            <h2 className="section-heading">Genera un nuovo quiz personalizzato (Qwen)</h2>
             <form className="generate-quiz-form" onSubmit={(e) => void handleGenerateCustomQuiz(e)}>
               <div className="form-field">
                 <label htmlFor="custom-topic-input">Argomento focus (opzionale)</label>
@@ -560,7 +560,7 @@ export function MyLearningPage() {
                 ) : (
                   <>
                     <Sparkles size={16} aria-hidden="true" />
-                    <span>Genera Custom Quiz</span>
+                    <span>Genera quiz personalizzato</span>
                   </>
                 )}
               </button>
@@ -568,11 +568,11 @@ export function MyLearningPage() {
           </section>
 
           <section className="panel-card">
-            <h2 className="section-heading">I tuoi Custom Quiz</h2>
+            <h2 className="section-heading">I tuoi quiz personalizzati</h2>
             {customQuizzes.length === 0 ? (
               <div className="empty-card">
                 <p>
-                  Nessun Custom Quiz ancora generato. Usa il modulo qui sopra per creare un quiz
+                  Nessun quiz personalizzato ancora generato. Usa il modulo qui sopra per creare un quiz
                   personalizzato in base alle tue domande RAG e alle tue lacune.
                 </p>
               </div>

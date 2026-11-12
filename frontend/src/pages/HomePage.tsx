@@ -96,14 +96,14 @@ export function HomePage() {
           </div>
           <h1>Benvenuto, {user.displayName}</h1>
           <p>
-            Consulta i manuali con l&apos;Assistente AI, segui i percorsi formativi generati dalla
-            knowledge base e verifica i progressi con quiz mirati.
+            Consulta i manuali con Operator Copilot, segui i percorsi formativi generati dalla
+            base di conoscenza e verifica i progressi con quiz mirati.
           </p>
         </div>
         <div className="hero-actions">
           <Link to="/assistant" className="btn btn-primary">
             <MessageSquareText size={16} aria-hidden="true" />
-            <span>Apri AI Assistant</span>
+            <span>Apri Operator Copilot</span>
           </Link>
           <Link to="/learning" className="btn btn-secondary">
             <BookOpen size={16} aria-hidden="true" />
@@ -122,7 +122,7 @@ export function HomePage() {
               <MessageSquareText size={20} />
             </div>
             <div className="quick-card-body">
-              <h3>Chiedi all&apos;AI Assistant</h3>
+              <h3>Chiedi a Operator Copilot</h3>
               <p>Interroga i manuali operativi e consulta le fonti citate.</p>
             </div>
             <ArrowRight size={16} className="quick-card-arrow" />
@@ -133,7 +133,7 @@ export function HomePage() {
               <BookOpen size={20} />
             </div>
             <div className="quick-card-body">
-              <h3>Vai al Learning Area</h3>
+              <h3>Vai all&apos;Area Formazione</h3>
               <p>{courses.length} percorsi formativi disponibili per il tuo ruolo.</p>
             </div>
             <ArrowRight size={16} className="quick-card-arrow" />
@@ -144,7 +144,7 @@ export function HomePage() {
               <Sparkles size={20} />
             </div>
             <div className="quick-card-body">
-              <h3>Genera un Custom Quiz</h3>
+              <h3>Genera un quiz personalizzato</h3>
               <p>
                 {profile?.open_gaps.length ?? 0} lacune aperte da verificare con quiz mirati.
               </p>

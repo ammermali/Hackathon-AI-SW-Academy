@@ -73,13 +73,13 @@ export function OwnerTopicsPage() {
     <div className="page-container">
       <div className="breadcrumb-row">
         <Link to="/owner" className="back-link">
-          <ArrowLeft size={15} /> Torna a Owner Dashboard
+          <ArrowLeft size={15} /> Torna a Dashboard Learning Manager
         </Link>
       </div>
 
       <div className="page-header">
         <div>
-          <h1>Topics to Review</h1>
+          <h1>Argomenti da rivedere</h1>
           <p>
             Argomenti più critici o soggetti ad errori ripetuti, con drilldown sugli operatori
             coinvolti.
@@ -112,10 +112,10 @@ export function OwnerTopicsPage() {
           aria-label="Filtra criticità"
         >
           <option value="">Tutte le criticità</option>
-          <option value="CRITICAL">CRITICAL</option>
-          <option value="HIGH">HIGH</option>
-          <option value="MEDIUM">MEDIUM</option>
-          <option value="LOW">LOW</option>
+          <option value="CRITICAL">Critica</option>
+          <option value="HIGH">Alta</option>
+          <option value="MEDIUM">Media</option>
+          <option value="LOW">Bassa</option>
         </select>
       </section>
 

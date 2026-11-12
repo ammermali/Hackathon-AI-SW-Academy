@@ -81,7 +81,7 @@ export function Sidebar({
             <div className="brand-block">
               <div>
                 <div className="brand-name">Conversazioni</div>
-                <div className="brand-sub">Storico AI Assistant</div>
+                <div className="brand-sub">Storico Operator Copilot</div>
               </div>
             </div>
           ) : (

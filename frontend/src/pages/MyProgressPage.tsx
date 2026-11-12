@@ -95,14 +95,14 @@ export function MyProgressPage() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>My Progress</h1>
+          <h1>I miei progressi</h1>
           <p>
             Analisi delle competenze acquisite, accuratezza nei quiz e stato delle lacune per{" "}
             <strong>{user.displayName}</strong>.
           </p>
         </div>
         <Link to="/my-learning" className="btn btn-primary">
-          Vai a Custom Quiz
+          Vai ai quiz personalizzati
         </Link>
       </div>
 
@@ -250,7 +250,7 @@ export function MyProgressPage() {
           {(profile?.frequent_questions.length ?? 0) > 0 && (
             <section className="panel-card">
               <div className="panel-card-header">
-                <h2>Domande frequenti inviate all&apos;AI Assistant</h2>
+                <h2>Domande frequenti inviate a Operator Copilot</h2>
                 <ShieldAlert size={16} aria-hidden="true" />
               </div>
               <div className="tag-row">

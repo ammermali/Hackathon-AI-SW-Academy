@@ -11,14 +11,14 @@ export function OwnerRoute({ children }: { children: ReactNode }) {
       <div className="page-container">
         <section className="empty-card owner-guard-card" role="alert">
           <Lock size={28} aria-hidden="true" />
-          <h1>Accesso riservato all&apos;Area Owner</h1>
+          <h1>Accesso riservato all&apos;Area Learning Manager</h1>
           <p>
             Il profilo attivo (<strong>{user.displayName}</strong>, ruolo <code>{user.role}</code>)
-            non dispone dei permessi Owner necessari per consultare Learning Analytics e governance.
+            non dispone dei permessi Learning Manager necessari per consultare analisi apprendimento e governance.
           </p>
           {demoModeEnabled && (
             <p className="muted-meta">
-              Se stai testando la piattaforma in Demo Mode, seleziona un profilo Owner (es.{" "}
+              Se stai testando la piattaforma in Demo Mode, seleziona un profilo Learning Manager (es.{" "}
               <code>owner_demo</code>) dal selettore utente nell&apos;header in alto.
             </p>
           )}

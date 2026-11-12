@@ -66,7 +66,7 @@ describe("AI Software Academy — Milestone UI 2 Platform & RAG", () => {
     renderAt("/assistant");
 
     expect(await screen.findByText("Come posso aiutarti oggi?")).toBeInTheDocument();
-    expect(await screen.findAllByText("RAG Connesso")).toHaveLength(1);
+    expect(await screen.findAllByText("Connesso")).toHaveLength(1);
 
     const textarea = screen.getByPlaceholderText(/Fai una domanda sui manuali/i);
 
@@ -421,7 +421,7 @@ describe("AI Software Academy — Milestone UI 2 Platform & RAG", () => {
 
     expect(await screen.findByText(/Benvenuto, Maria Rossi/i)).toBeInTheDocument();
     // Owner section is NOT visible to operatore
-    expect(screen.queryByRole("link", { name: "Owner Dashboard" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Dashboard Learning Manager" })).not.toBeInTheDocument();
 
     // Switch user via Demo User Switcher
     const switcherTrigger = await screen.findByRole("button", { name: /DEMO/i });
@@ -429,10 +429,10 @@ describe("AI Software Academy — Milestone UI 2 Platform & RAG", () => {
     await user.click(await screen.findByRole("option", { name: /Elena Conti \(Owner\)/i }));
 
     // Owner nav appears cleanly
-    const ownerLink = await screen.findByRole("link", { name: "Owner Dashboard" });
+    const ownerLink = await screen.findByRole("link", { name: "Dashboard Learning Manager" });
     await user.click(ownerLink);
 
-    expect(await screen.findByRole("heading", { name: "Owner Learning Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Dashboard Learning Manager" })).toBeInTheDocument();
     expect(await screen.findByText("78.5%")).toBeInTheDocument();
   });
 
@@ -650,8 +650,8 @@ describe("AI Software Academy — Milestone UI 2 Platform & RAG", () => {
     expect(await screen.findByRole("button", { name: /Lezione completata/i })).toBeInTheDocument();
 
     // 2. Navigate to My Learning -> Custom Quizzes -> Run 4-option quiz
-    await user.click(screen.getByRole("link", { name: "My Learning" }));
-    await user.click(await screen.findByRole("tab", { name: /My Custom Quizzes/i }));
+    await user.click(screen.getByRole("link", { name: "La mia formazione" }));
+    await user.click(await screen.findByRole("tab", { name: /I miei quiz personalizzati/i }));
     await user.click(await screen.findByRole("button", { name: /Svolgi quiz/i }));
 
     expect(
@@ -948,16 +948,16 @@ describe("AI Software Academy — Milestone UI 2 Platform & RAG", () => {
     });
 
     renderAt("/knowledge-base");
-    // Redirected away from /knowledge-base and Gestione KB nav is hidden for operatore
-    expect(screen.queryByRole("link", { name: "Gestione KB" })).not.toBeInTheDocument();
+    // Redirected away from /knowledge-base and Gestione documenti nav is hidden for operatore
+    expect(screen.queryByRole("link", { name: "Gestione documenti" })).not.toBeInTheDocument();
 
     // Switch to Paolo Ferri (Knowledge Manager)
     await user.click(await screen.findByRole("button", { name: /DEMO/i }));
     await user.click(await screen.findByRole("option", { name: /Paolo Ferri \(Knowledge Manager\)/i }));
 
-    const kbLink = await screen.findByRole("link", { name: "Gestione KB" });
+    const kbLink = await screen.findByRole("link", { name: "Gestione documenti" });
     await user.click(kbLink);
-    expect(await screen.findByRole("heading", { name: /Knowledge Base & Ingestion/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Base di conoscenza e caricamento/i })).toBeInTheDocument();
     expect(await screen.findByText("manuale_base.md")).toBeInTheDocument();
 
     // Select a file via file input and upload + ingest

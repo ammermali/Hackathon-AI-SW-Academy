@@ -159,7 +159,7 @@ export function CourseDetailPage() {
     return (
       <div className="page-container">
         <Link to="/learning" className="back-link">
-          <ArrowLeft size={15} /> Torna al Learning Area
+          <ArrowLeft size={15} /> Torna all&apos;Area Formazione
         </Link>
         <ErrorBanner message={error ?? "Corso non trovato."} onRetry={() => void loadCourseDetail()} />
       </div>
@@ -380,7 +380,7 @@ export function CourseDetailPage() {
                       Ripeti quiz
                     </button>
                     <Link to="/my-learning" className="btn btn-primary">
-                      Vai a My Learning
+                      Vai a La mia formazione
                     </Link>
                   </div>
                 </div>

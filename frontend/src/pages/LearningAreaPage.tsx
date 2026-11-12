@@ -183,9 +183,9 @@ export function LearningAreaPage() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>Learning Area</h1>
+          <h1>Area Formazione</h1>
           <p>
-            Catalogo dei percorsi didattici generati dalla knowledge base e filtrati per il tuo
+            Catalogo dei percorsi didattici generati dalla base di conoscenza e filtrati per il tuo
             ruolo ({user.role}).
           </p>
         </div>

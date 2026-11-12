@@ -28,16 +28,16 @@ export function PlatformSidebar({
 
   const mainNav = [
     { to: "/", label: "Home", icon: Home, end: true },
-    { to: "/assistant", label: "AI Assistant", icon: Bot, end: false },
-    { to: "/learning", label: "Learning Area", icon: BookOpen, end: false },
-    { to: "/my-learning", label: "My Learning", icon: ListChecks, end: false },
-    { to: "/my-progress", label: "My Progress", icon: BarChart3, end: false },
+    { to: "/assistant", label: "Operator Copilot", icon: Bot, end: false },
+    { to: "/learning", label: "Area Formazione", icon: BookOpen, end: false },
+    { to: "/my-learning", label: "La mia formazione", icon: ListChecks, end: false },
+    { to: "/my-progress", label: "I miei progressi", icon: BarChart3, end: false },
   ];
 
   const ownerNav = [
-    { to: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/owner/users", label: "Users Analytics", icon: Users, end: false },
-    { to: "/owner/topics", label: "Topics to Review", icon: AlertTriangle, end: false },
+    { to: "/owner", label: "Dashboard Learning Manager", icon: LayoutDashboard, end: true },
+    { to: "/owner/users", label: "Analisi utenti", icon: Users, end: false },
+    { to: "/owner/topics", label: "Argomenti da rivedere", icon: AlertTriangle, end: false },
   ];
 
   return (
@@ -57,7 +57,6 @@ export function PlatformSidebar({
             </div>
             <div>
               <div className="brand-name">AI Software Academy</div>
-              <div className="brand-sub">Formazione PA &amp; RAG</div>
             </div>
           </div>
         </div>
@@ -85,7 +84,7 @@ export function PlatformSidebar({
 
           {isKnowledgeManager && (
             <>
-              <div className="nav-group-label">Knowledge Base</div>
+              <div className="nav-group-label">Base di conoscenza</div>
               <ul>
                 <li>
                   <NavLink
@@ -94,7 +93,7 @@ export function PlatformSidebar({
                     className={({ isActive }) => `nav-link-item ${isActive ? "nav-link-active" : ""}`}
                   >
                     <Database size={17} aria-hidden="true" />
-                    <span>Gestione KB</span>
+                    <span>Gestione documenti</span>
                   </NavLink>
                 </li>
               </ul>
@@ -103,7 +102,7 @@ export function PlatformSidebar({
 
           {isOwner && (
             <>
-              <div className="nav-group-label nav-group-owner">Area Owner</div>
+              <div className="nav-group-label nav-group-owner">Area Learning Manager</div>
               <ul>
                 {ownerNav.map((item) => {
                   const Icon = item.icon;
@@ -125,10 +124,6 @@ export function PlatformSidebar({
             </>
           )}
         </nav>
-
-        <div className="platform-sidebar-footer">
-          <span className="sidebar-version-note">Workspace RAG + LMS integrato</span>
-        </div>
       </aside>
     </>
   );

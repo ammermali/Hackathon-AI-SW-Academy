@@ -81,13 +81,13 @@ export function OwnerUsersPage() {
     <div className="page-container">
       <div className="breadcrumb-row">
         <Link to="/owner" className="back-link">
-          <ArrowLeft size={15} /> Torna a Owner Dashboard
+          <ArrowLeft size={15} /> Torna a Dashboard Learning Manager
         </Link>
       </div>
 
       <div className="page-header">
         <div>
-          <h1>Users Analytics</h1>
+          <h1>Analisi utenti</h1>
           <p>Monitoraggio individuale di progressi, quiz e lacune per ogni utente del tenant.</p>
         </div>
       </div>
@@ -174,7 +174,7 @@ export function OwnerUsersPage() {
                       <th>Stato</th>
                       <th>Corsi compl.</th>
                       <th>Quiz success</th>
-                      <th>Custom quiz</th>
+                      <th>Quiz personalizzati</th>
                       <th>Lacune aperte</th>
                       <th>Ultima attività</th>
                       <th></th>

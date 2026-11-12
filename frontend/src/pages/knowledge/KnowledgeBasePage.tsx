@@ -189,7 +189,7 @@ export function KnowledgeBasePage() {
     <div className="page-container">
       <div className="page-header">
         <div>
-          <h1>Knowledge Base &amp; Ingestion</h1>
+          <h1>Base di conoscenza e caricamento</h1>
           <p>
             Consulta tutti i documenti indicizzati per il RAG e carica nuovi manuali o FAQ con
             indicizzazione incrementale immediata.

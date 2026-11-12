@@ -20,7 +20,7 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const statusLabel =
     backendStatus === "online"
-      ? "RAG Connesso"
+      ? "Connesso"
       : backendStatus === "offline"
         ? "Backend non raggiungibile"
         : "Verifica connessione...";

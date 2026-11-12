@@ -5,7 +5,6 @@ import {
   BookOpen,
   Bot,
   Database,
-  GraduationCap,
   Home,
   LayoutDashboard,
   ListChecks,
@@ -53,7 +52,7 @@ export function PlatformSidebar({
         <div className="sidebar-top">
           <div className="brand-block">
             <div className="brand-logo" aria-hidden="true">
-              <GraduationCap size={20} />
+              <img src="/brand-logo.png" alt="" className="brand-logo-img" />
             </div>
             <div>
               <div className="brand-name">AI Software Academy</div>

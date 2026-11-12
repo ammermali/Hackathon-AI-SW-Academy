@@ -134,7 +134,9 @@ export function LearningAreaPage() {
     setIsGeneratingCourse(true);
     try {
       const allowedRoles =
-        audienceScope === "owner_only" ? ["owner", "admin"] : ["operatore", "owner", "admin"];
+        audienceScope === "owner_only"
+          ? ["learning_manager", "owner", "admin"]
+          : ["operatore", "learning_manager", "owner", "admin"];
       const created = await generateCourse(authContext, {
         ...(sourceMode === "document"
           ? { document_source: selectedDocSource.trim() }
@@ -186,7 +188,7 @@ export function LearningAreaPage() {
           <h1>Area Formazione</h1>
           <p>
             Catalogo dei percorsi didattici generati dalla base di conoscenza e filtrati per il tuo
-            ruolo ({user.role}).
+            ruolo ({user.role === "owner" || user.role === "learning_manager" ? "learning manager" : user.role === "knowledge_manager" ? "knowledge manager" : user.role}).
           </p>
         </div>
 
@@ -299,8 +301,8 @@ export function LearningAreaPage() {
                   value={audienceScope}
                   onChange={(e) => setAudienceScope(e.target.value as "all" | "owner_only")}
                 >
-                  <option value="all">Operatori e Owner</option>
-                  <option value="owner_only">Solo Owner</option>
+                  <option value="all">Operatori e Learning Manager</option>
+                  <option value="owner_only">Solo Learning Manager</option>
                 </select>
               </div>
 

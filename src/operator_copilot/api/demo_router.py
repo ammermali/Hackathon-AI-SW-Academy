@@ -160,7 +160,7 @@ def create_demo_router(
         _require_demo_active()
         tenant_id = x_tenant_id.strip() or "default"
         users = _collect_tenant_demo_users(rag, tenant_id)
-        return sorted(users.values(), key=lambda u: (0 if u.role == "owner" else 1, u.display_name.lower()))
+        return sorted(users.values(), key=lambda u: (0 if u.role in {"owner", "learning_manager"} else 1, u.display_name.lower()))
 
     @router.post("/switch-user", response_model=DemoSwitchResponse)
     def switch_demo_user(

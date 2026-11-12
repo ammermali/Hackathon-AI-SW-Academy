@@ -1,6 +1,17 @@
 /** TypeScript contracts for AI Software Academy Milestone UI 2 (Auth/Demo, Academy, CustomQuiz, Owner). */
 
-export type UserRole = "operatore" | "owner" | "admin";
+export type UserRole = "operatore" | "learning_manager" | "owner" | "knowledge_manager" | "admin";
+
+export function formatRoleLabel(role: string): string {
+  const normalized = role.trim().toLowerCase();
+  if (normalized === "owner" || normalized === "learning_manager") {
+    return "learning manager";
+  }
+  if (normalized === "knowledge_manager") {
+    return "knowledge manager";
+  }
+  return role;
+}
 
 export interface DemoUserItem {
   user_id: string;

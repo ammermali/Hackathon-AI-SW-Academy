@@ -162,8 +162,8 @@ def _has_role_access(allowed_roles: list[str] | None, caller_role: str) -> bool:
         return True
     if caller_role == "admin":
         return True
-    if caller_role == "owner":
-        return "owner" in allowed_roles or "operatore" in allowed_roles
+    if caller_role in {"owner", "learning_manager"}:
+        return "owner" in allowed_roles or "learning_manager" in allowed_roles or "operatore" in allowed_roles
     return caller_role in allowed_roles
 
 
@@ -186,7 +186,7 @@ def create_academy_router(
         expected_admin = settings.admin_api_key.get_secret_value()
         if x_admin_key and secrets.compare_digest(x_admin_key, expected_admin):
             return ctx
-        if ctx["role"] == "owner":
+        if ctx["role"] in {"owner", "learning_manager"}:
             expected_owner = settings.owner_api_key.get_secret_value()
             if ctx.get("is_demo_verified") == "true" or (
                 x_owner_key and secrets.compare_digest(x_owner_key, expected_owner)

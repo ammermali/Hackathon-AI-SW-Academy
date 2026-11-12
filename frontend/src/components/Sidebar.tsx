@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import {
-  GraduationCap,
   MessageSquare,
   Plus,
   Trash2,
@@ -87,7 +86,7 @@ export function Sidebar({
           ) : (
             <div className="brand-block">
               <div className="brand-logo" aria-hidden="true">
-                <GraduationCap size={20} />
+                <img src="/brand-logo.png" alt="" className="brand-logo-img" />
               </div>
               <div>
                 <div className="brand-name">AI Software Academy</div>

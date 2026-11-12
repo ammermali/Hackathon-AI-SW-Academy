@@ -2,15 +2,15 @@
   --bg-app: #f6f8fb;
   --bg-surface: #ffffff;
   --bg-subtle: #f0f4f9;
-  --bg-sidebar: #0f172a;
-  --bg-sidebar-hover: #1e293b;
-  --bg-sidebar-active: #1e3a5f;
+  --bg-sidebar: linear-gradient(180deg, #0c2b5a 0%, #2577cd 100%);
+  --bg-sidebar-hover: rgba(255, 255, 255, 0.12);
+  --bg-sidebar-active: rgba(255, 255, 255, 0.22);
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --text-sidebar: #e2e8f0;
-  --text-sidebar-muted: #94a3b8;
+  --text-sidebar: #f8fafc;
+  --text-sidebar-muted: #cbd5e1;
 
   --accent: #0f62fe;
   --accent-hover: #0043ce;
@@ -19,7 +19,7 @@
 
   --border-light: #e2e8f0;
   --border-medium: #cbd5e1;
-  --border-sidebar: #1e293b;
+  --border-sidebar: rgba(255, 255, 255, 0.14);
 
   --status-online: #16a34a;
   --status-offline: #dc2626;

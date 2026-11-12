@@ -92,7 +92,7 @@ export function HomePage() {
           <div className="hero-eyebrow">
             <span>{user.amministrazione || "Area Operativa"}</span>
             <span>•</span>
-            <span>Profilo: {user.role}</span>
+            <span>Profilo: {user.role === "owner" || user.role === "learning_manager" ? "learning manager" : user.role === "knowledge_manager" ? "knowledge manager" : user.role}</span>
           </div>
           <h1>Benvenuto, {user.displayName}</h1>
           <p>

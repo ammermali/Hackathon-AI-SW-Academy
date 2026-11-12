@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, FlaskConical, Search } from "lucide-react";
+import { Check, ChevronDown, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { formatRoleLabel } from "../../types/platform";
 
 export function DemoUserSwitcher() {
   const { user, demoModeEnabled, demoUsers, isSwitchingUser, switchUser } = useAuth();
@@ -45,7 +46,6 @@ export function DemoUserSwitcher() {
         aria-haspopup="listbox"
         title="Modalità Demo: cambia utente tra quelli presenti nel sistema"
       >
-        <FlaskConical size={14} className="demo-icon" aria-hidden="true" />
         <span className="demo-tag">DEMO</span>
         <span className="demo-trigger-name">{isSwitchingUser ? "Cambio..." : user.displayName}</span>
         <ChevronDown size={15} aria-hidden="true" />
@@ -93,7 +93,7 @@ export function DemoUserSwitcher() {
                       <div className="demo-user-main">
                         <div className="demo-user-row-top">
                           <span className="demo-user-name">{item.display_name}</span>
-                          <span className={`role-chip role-chip-${item.role}`}>{item.role}</span>
+                          <span className={`role-chip role-chip-${item.role}`}>{formatRoleLabel(item.role)}</span>
                         </div>
                         <span className="demo-user-sub">
                           {item.user_id} • {item.amministrazione}

@@ -24,9 +24,9 @@ DEMO_DIRECTORY = [
     },
     {
         "user_id": "owner_demo",
-        "display_name": "Elena Conti (Owner)",
+        "display_name": "Elena Conti (Learning Manager)",
         "amministrazione": "Ente Pilota PA",
-        "role": "owner",
+        "role": "learning_manager",
     },
     {
         "user_id": "km_paolo",
@@ -60,6 +60,9 @@ def main() -> None:
                     )
                 )
                 inserted += 1
+            elif existing.user_id == "owner_demo":
+                existing.display_name = entry["display_name"]
+                existing.role = entry["role"]
         session.commit()
     print(f"Seeded {inserted} new OrganizationUser records (total directory entries: {len(DEMO_DIRECTORY)}).")
 

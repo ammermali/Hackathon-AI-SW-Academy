@@ -149,10 +149,10 @@ def build_owner_context_dependency(settings: Settings) -> Callable[..., dict[str
             claims = verify_demo_token(settings, x_demo_token, expected_tenant=tenant_id)
             demo_role = str(claims.get("role") or "operatore").strip().lower()
             demo_uid = str(claims.get("user_id") or "anonymous").strip()
-            if demo_role != "owner" or demo_uid == "anonymous":
+            if demo_role not in {"owner", "learning_manager"} or demo_uid == "anonymous":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Accesso riservato esclusivamente ad utenti autenticati con ruolo 'owner'.",
+                    detail="Accesso riservato esclusivamente ad utenti autenticati con ruolo 'learning_manager'.",
                 )
             return {
                 "tenant_id": tenant_id,
@@ -163,16 +163,16 @@ def build_owner_context_dependency(settings: Settings) -> Callable[..., dict[str
 
         role = x_user_role.strip().lower() or "operatore"
         owner_id = x_user_id.strip() or "anonymous"
-        if role != "owner" or owner_id == "anonymous":
+        if role not in {"owner", "learning_manager"} or owner_id == "anonymous":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Accesso riservato esclusivamente ad utenti autenticati con ruolo 'owner'.",
+                detail="Accesso riservato esclusivamente ad utenti autenticati con ruolo 'learning_manager'.",
             )
         expected = settings.owner_api_key.get_secret_value()
         if not x_owner_key or not secrets.compare_digest(x_owner_key, expected):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ruolo 'owner' richiede un header X-Owner-Key valido.",
+                detail="Ruolo 'learning_manager' richiede un header X-Owner-Key valido.",
             )
         allowed_admins = [
             item.strip()

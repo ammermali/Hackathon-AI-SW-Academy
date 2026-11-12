@@ -1,5 +1,6 @@
 import { Building2, Cpu, Menu, RefreshCw, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { formatRoleLabel } from "../../types/platform";
 import { DemoUserSwitcher } from "./DemoUserSwitcher";
 
 interface TopHeaderProps {
@@ -38,7 +39,7 @@ export function TopHeader({ onToggleSidebar }: TopHeaderProps) {
               <strong className="identity-name">{user.displayName}</strong>
               <span className={`role-chip role-chip-${user.role}`}>
                 <ShieldCheck size={11} aria-hidden="true" />
-                {user.role}
+                {formatRoleLabel(user.role)}
               </span>
             </div>
             <div className="identity-sub-row">

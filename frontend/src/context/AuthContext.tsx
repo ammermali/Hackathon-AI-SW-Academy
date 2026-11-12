@@ -196,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshDemoUsers,
         switchUser,
         clearSwitchError: () => setSwitchError(null),
-        isOwner: user.role === "owner",
+        isOwner: user.role === "owner" || user.role === "learning_manager",
         isKnowledgeManager: user.role === "knowledge_manager",
       }}
     >

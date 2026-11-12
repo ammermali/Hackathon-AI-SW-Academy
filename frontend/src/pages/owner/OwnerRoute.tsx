@@ -13,7 +13,8 @@ export function OwnerRoute({ children }: { children: ReactNode }) {
           <Lock size={28} aria-hidden="true" />
           <h1>Accesso riservato all&apos;Area Learning Manager</h1>
           <p>
-            Il profilo attivo (<strong>{user.displayName}</strong>, ruolo <code>{user.role}</code>)
+            Il profilo attivo (<strong>{user.displayName}</strong>, ruolo{" "}
+            <code>{user.role === "owner" || user.role === "learning_manager" ? "learning manager" : user.role}</code>)
             non dispone dei permessi Learning Manager necessari per consultare analisi apprendimento e governance.
           </p>
           {demoModeEnabled && (

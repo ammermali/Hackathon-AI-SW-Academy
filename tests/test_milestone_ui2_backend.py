@@ -320,6 +320,47 @@ def test_owner_course_authoring_and_rbac(tmp_path: Path) -> None:
     assert patch_lesson.status_code == 200
     assert patch_lesson.json()["summary"] == "Sintesi aggiornata dall'Owner"
 
+    # Authenticated learning_manager has full course authoring + dashboard access, but NO KB access
+    with _rag.db.session() as session:
+        session.add(
+            OrganizationUser(
+                id="org_lm_elena",
+                tenant_id="tenant_alfa",
+                user_id="lm_elena",
+                display_name="Elena Conti (Learning Manager)",
+                amministrazione="Comune Alfa",
+                role="learning_manager",
+            )
+        )
+        session.commit()
+    lm_token = client.post(
+        "/api/v1/demo/switch-user",
+        json={"user_id": "lm_elena"},
+        headers={"X-Tenant-ID": "tenant_alfa"},
+    ).json()["token"]
+    assert (
+        client.patch(
+            f"/api/v1/academy/courses/{cid}",
+            json={"title": "Corso Learning Manager", "change_summary": "Update LM"},
+            headers={"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": lm_token},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get(
+            "/api/v1/owner/overview",
+            headers={"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": lm_token},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get(
+            "/api/v1/knowledge/documents",
+            headers={"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": lm_token},
+        ).status_code
+        == 403
+    )
+
 
 def test_retrieval_query_normalization_and_dense_fallback(tmp_path: Path, monkeypatch) -> None:
     from operator_copilot.retrieval.reranker import normalize_retrieval_query

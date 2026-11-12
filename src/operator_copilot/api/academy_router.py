@@ -162,7 +162,9 @@ def _has_role_access(allowed_roles: list[str] | None, caller_role: str) -> bool:
         return True
     if caller_role == "admin":
         return True
-    if caller_role in {"owner", "learning_manager"}:
+    if caller_role == "learning_manager":
+        return True
+    if caller_role == "owner":
         return "owner" in allowed_roles or "learning_manager" in allowed_roles or "operatore" in allowed_roles
     return caller_role in allowed_roles
 
@@ -182,7 +184,7 @@ def create_academy_router(
         x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
         x_owner_key: str | None = Header(default=None, alias="X-Owner-Key"),
     ) -> dict[str, str]:
-        """Allow authenticated Admin (X-Admin-Key) or verified Owner (demo token or X-Owner-Key)."""
+        """Allow authenticated Admin (X-Admin-Key) or verified Learning Manager (demo token or X-Owner-Key)."""
         expected_admin = settings.admin_api_key.get_secret_value()
         if x_admin_key and secrets.compare_digest(x_admin_key, expected_admin):
             return ctx
@@ -194,7 +196,7 @@ def create_academy_router(
                 return ctx
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operazione riservata esclusivamente ad utenti Owner o Admin autenticati.",
+            detail="Operazione riservata esclusivamente ad utenti Learning Manager o Admin autenticati.",
         )
 
     def _services(rag: RAGEngine) -> tuple[KnowledgeJobRunner, AICourseGenerator, GroundingVerifier, CourseLifecycleManager]:

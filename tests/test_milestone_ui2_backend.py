@@ -485,3 +485,47 @@ def test_traditional_course_quiz_uses_contextual_distractors_without_ticket_fill
             assert not opt.rstrip().endswith(":")
 
 
+def test_owner_users_counts_lesson_completed_courses_and_quiz_returns_feedback(tmp_path: Path) -> None:
+    _rag, client, cid, _lid = _setup_demo_app(tmp_path)
+
+    own_token = client.post(
+        "/api/v1/demo/switch-user",
+        json={"user_id": "owner_alfa"},
+        headers={"X-Tenant-ID": "tenant_alfa"},
+    ).json()["token"]
+    headers = {"X-Tenant-ID": "tenant_alfa", "X-Demo-Token": own_token}
+
+    # Complete all lessons of the course as Owner without submitting the quiz yet
+    course_resp = client.get(f"/api/v1/academy/courses/{cid}", headers=headers)
+    assert course_resp.status_code == 200
+    course_data = course_resp.json()
+    for mod in course_data["modules"]:
+        for les in mod["lessons"]:
+            comp = client.post(f"/api/v1/academy/courses/{cid}/lessons/{les['id']}/complete", headers=headers)
+            assert comp.status_code == 200
+
+    users_resp = client.get("/api/v1/owner/users", headers=headers)
+    assert users_resp.status_code == 200
+    owner_row = next(u for u in users_resp.json()["items"] if u["user_id"] == "owner_alfa")
+    assert owner_row["courses_completed"] >= 1
+
+    detail_resp = client.get("/api/v1/owner/users/owner_alfa", headers=headers)
+    assert detail_resp.status_code == 200
+    completed_ids = {c["course_id"] for c in detail_resp.json()["learning_performance"]["courses_completed"]}
+    assert cid in completed_ids
+
+    # Submit the traditional course quiz and verify per-question feedback includes correct_answer
+    quiz = course_data["quizzes"][0]
+    answers = {q["id"]: q["options"][0] for q in quiz["questions"]}
+    submit_resp = client.post(
+        f"/api/v1/academy/courses/{cid}/quizzes/{quiz['id']}/submit",
+        json={"user_id": "owner_alfa", "answers": answers},
+        headers=headers,
+    )
+    assert submit_resp.status_code == 200
+    body = submit_resp.json()
+    assert len(body["question_feedback"]) == len(quiz["questions"])
+    assert all(fb["correct_answer"] for fb in body["question_feedback"])
+
+
+

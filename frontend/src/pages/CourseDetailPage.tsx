@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FileText,
   GraduationCap,
+  XCircle,
 } from "lucide-react";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import {
@@ -334,6 +335,39 @@ export function CourseDetailPage() {
                       Argomenti da ripassare: <strong>{quizResult.wrong_topics.join(", ")}</strong>
                     </p>
                   )}
+                  {quizResult.question_feedback && quizResult.question_feedback.length > 0 && (
+                    <div className="stack-sm">
+                      <h4>Dettaglio risposte</h4>
+                      {quizResult.question_feedback.map((fb, idx) => (
+                        <div
+                          key={fb.question_id}
+                          className={`feedback-item ${fb.is_correct ? "is-correct" : "is-wrong"}`}
+                        >
+                          <div className="feedback-head">
+                            <span className="feedback-title">
+                              {fb.is_correct ? (
+                                <CheckCircle2 size={16} className="text-success" />
+                              ) : (
+                                <XCircle size={16} className="text-danger" />
+                              )}
+                              Domanda {idx + 1}
+                            </span>
+                            <StatusBadge tone={fb.is_correct ? "success" : "danger"}>
+                              {fb.is_correct ? "Corretta" : "Errata"}
+                            </StatusBadge>
+                          </div>
+                          <p><strong>{fb.question_text}</strong></p>
+                          <p className="muted-meta">La tua risposta: {fb.user_answer || "—"}</p>
+                          {!fb.is_correct && (
+                            <p className="muted-meta">
+                              <strong>Risposta corretta:</strong> {fb.correct_answer}
+                            </p>
+                          )}
+                          {fb.explanation && <p>{fb.explanation}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="quiz-result-actions">
                     <button
                       type="button"
@@ -413,21 +447,9 @@ export function CourseDetailPage() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  className={`btn ${isCurrentLessonCompleted ? "btn-success-outline" : "btn-primary"}`}
-                  disabled={isCompletingLesson || isCurrentLessonCompleted}
-                  onClick={() => void handleMarkLessonComplete()}
-                >
-                  <CheckCircle2 size={16} aria-hidden="true" />
-                  <span>
-                    {isCurrentLessonCompleted
-                      ? "Lezione completata"
-                      : isCompletingLesson
-                        ? "Salvataggio..."
-                        : "Segna lezione come completata"}
-                  </span>
-                </button>
+                {isCurrentLessonCompleted && (
+                  <StatusBadge tone="success">Lezione completata</StatusBadge>
+                )}
               </div>
 
               {!currentRef.lesson.is_grounded && currentRef.lesson.grounding_warnings.length > 0 && (
@@ -635,6 +657,22 @@ export function CourseDetailPage() {
                   }}
                 >
                   <ArrowLeft size={15} /> Lezione precedente
+                </button>
+
+                <button
+                  type="button"
+                  className={`btn ${isCurrentLessonCompleted ? "btn-success-outline" : "btn-primary"}`}
+                  disabled={isCompletingLesson || isCurrentLessonCompleted}
+                  onClick={() => void handleMarkLessonComplete()}
+                >
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                  <span>
+                    {isCurrentLessonCompleted
+                      ? "Lezione completata"
+                      : isCompletingLesson
+                        ? "Salvataggio..."
+                        : "Segna lezione come completata"}
+                  </span>
                 </button>
 
                 <button

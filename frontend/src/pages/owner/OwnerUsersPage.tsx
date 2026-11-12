@@ -155,7 +155,7 @@ export function OwnerUsersPage() {
 
       {error && <ErrorBanner message={error} onRetry={() => void loadUsers()} />}
 
-      <div className={selectedDetail ? "owner-split-grid" : ""}>
+      <div className="stack-lg">
         <section className="panel-card">
           {isLoading ? (
             <LoadingState label="Caricamento utenti..." />
@@ -248,7 +248,7 @@ export function OwnerUsersPage() {
         </section>
 
         {(selectedDetail || isLoadingDetail) && (
-          <aside className="panel-card detail-drawer-card" aria-label="Dettaglio utente">
+          <section className="panel-card detail-drawer-card" aria-label="Dettaglio utente">
             {isLoadingDetail ? (
               <LoadingState label="Caricamento profilo utente..." />
             ) : (
@@ -334,7 +334,7 @@ export function OwnerUsersPage() {
                 </div>
               )
             )}
-          </aside>
+          </section>
         )}
       </div>
     </div>

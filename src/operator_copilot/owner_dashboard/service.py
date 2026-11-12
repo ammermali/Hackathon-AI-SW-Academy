@@ -9,17 +9,19 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from sqlalchemy import func, select, union
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from operator_copilot.config.settings import Settings, get_settings
 from operator_copilot.course_generator.prompts import OWNER_INSIGHTS_PROMPT
 from operator_copilot.db.database import DatabaseManager, get_db_manager
 from operator_copilot.db.models import (
     Course,
+    CourseModule,
     CourseQuizAttempt,
     CustomQuiz,
     CustomQuizAttempt,
     LearningGap,
+    LessonCompletion,
     OrganizationUser,
     OwnerAuditLog,
     UserKnowledgeProfile,
@@ -571,6 +573,28 @@ class OwnerDashboardService:
                 .filter(CourseQuizAttempt.tenant_id == tenant_id, CourseQuizAttempt.user_id.in_(scoped_ids))
                 .all()
             )
+            lesson_completions = (
+                db.query(LessonCompletion)
+                .filter(LessonCompletion.tenant_id == tenant_id, LessonCompletion.user_id.in_(scoped_ids))
+                .all()
+            )
+            tenant_courses = (
+                db.query(Course)
+                .options(joinedload(Course.modules).joinedload(CourseModule.lessons))
+                .filter(Course.tenant_id == tenant_id)
+                .all()
+            )
+
+        course_lesson_ids: dict[str, set[str]] = {
+            c.id: {les.id for mod in c.modules for les in mod.lessons}
+            for c in tenant_courses
+        }
+        completed_lessons_by_user: dict[str, set[str]] = defaultdict(set)
+        lesson_ts_by_user: dict[str, list[datetime]] = defaultdict(list)
+        for lc in lesson_completions:
+            completed_lessons_by_user[lc.user_id].add(lc.lesson_id)
+            if lc.completed_at is not None:
+                lesson_ts_by_user[lc.user_id].append(lc.completed_at)
 
         prof_by_user: dict[str, list[UserKnowledgeProfile]] = defaultdict(list)
         for p in profiles:
@@ -604,7 +628,14 @@ class OwnerDashboardService:
                 if needle not in uid.lower() and needle not in meta["display_name"].lower() and needle not in meta["amministrazione"].lower():
                     continue
 
-            courses_completed = len({a.course_id for a in u_cqas if a.passed})
+            passed_course_ids = {a.course_id for a in u_cqas if a.passed}
+            u_completed_lessons = completed_lessons_by_user[uid]
+            lesson_completed_course_ids = {
+                cid
+                for cid, lids in course_lesson_ids.items()
+                if lids and lids.issubset(u_completed_lessons)
+            }
+            courses_completed = len(passed_course_ids | lesson_completed_course_ids)
             all_scores = [a.percentage for a in u_cqs] + [a.percentage for a in u_cqas]
             avg_success = _safe_avg(all_scores)
             open_gaps = [g for g in u_gaps if g.status != "RESOLVED"]
@@ -615,7 +646,12 @@ class OwnerDashboardService:
 
             timestamps = [
                 _to_utc_naive(dt)
-                for dt in ([a.completed_at for a in u_cqs] + [a.completed_at for a in u_cqas] + [p.updated_at for p in u_profs])
+                for dt in (
+                    [a.completed_at for a in u_cqs]
+                    + [a.completed_at for a in u_cqas]
+                    + [p.updated_at for p in u_profs]
+                    + lesson_ts_by_user[uid]
+                )
                 if dt is not None
             ]
             last_act = max(timestamps) if timestamps else None
@@ -711,7 +747,17 @@ class OwnerDashboardService:
                 .order_by(CustomQuizAttempt.completed_at.asc())
                 .all()
             )
-            courses = db.query(Course).filter(Course.tenant_id == tenant_id).all()
+            courses = (
+                db.query(Course)
+                .options(joinedload(Course.modules).joinedload(CourseModule.lessons))
+                .filter(Course.tenant_id == tenant_id)
+                .all()
+            )
+            lesson_completions = (
+                db.query(LessonCompletion)
+                .filter(LessonCompletion.tenant_id == tenant_id, LessonCompletion.user_id == user_id)
+                .all()
+            )
             custom_quizzes = {
                 q.id: q
                 for q in db.query(CustomQuiz).filter(CustomQuiz.tenant_id == tenant_id, CustomQuiz.user_id == user_id).all()
@@ -782,19 +828,31 @@ class OwnerDashboardService:
                 prev_pass or a.passed,
             )
 
+        completed_lesson_ids = {lc.lesson_id for lc in lesson_completions}
+        last_lesson_by_course: dict[str, datetime] = {}
+        for lc in lesson_completions:
+            if lc.completed_at is not None:
+                prev_dt = last_lesson_by_course.get(lc.course_id)
+                if prev_dt is None or lc.completed_at > prev_dt:
+                    last_lesson_by_course[lc.course_id] = lc.completed_at
+
         completed_courses: list[CourseProgressItem] = []
         todo_courses: list[CourseProgressItem] = []
         for c in courses:
             best_pct, last_dt, passed = course_best.get(c.id, (None, None, False))
+            c_lesson_ids = {les.id for mod in c.modules for les in mod.lessons}
+            all_lessons_done = bool(c_lesson_ids) and c_lesson_ids.issubset(completed_lesson_ids)
+            is_completed = passed or all_lessons_done
+            effective_dt = last_dt or (last_lesson_by_course.get(c.id) if all_lessons_done else None)
             item = CourseProgressItem(
                 course_id=c.id,
                 title=c.title,
                 course_type=c.course_type,
-                status="COMPLETATO" if passed else "DA_COMPLETARE",
+                status="COMPLETATO" if is_completed else "DA_COMPLETARE",
                 best_percentage=best_pct if best_pct is not None and best_pct >= 0 else None,
-                last_attempt_at=last_dt,
+                last_attempt_at=effective_dt,
             )
-            if passed:
+            if is_completed:
                 completed_courses.append(item)
             else:
                 todo_courses.append(item)

@@ -29,6 +29,7 @@ from operator_copilot.db.models import (
 from operator_copilot.generation.answer_generator import AnswerGenerator
 from operator_copilot.retrieval.retriever import HybridRetriever
 from operator_copilot.schemas.customquiz import (
+    CourseQuizQuestionFeedback,
     CourseQuizSubmitResponse,
     CustomQuizQuestionPublicResponse,
     CustomQuizResponse,
@@ -163,13 +164,16 @@ class AdaptiveLearningService:
 
             wrong_q_ids: list[str] = []
             wrong_topics: list[str] = []
+            question_feedback: list[CourseQuizQuestionFeedback] = []
             correct = 0
-            total = len(quiz.questions)
+            ordered_questions = sorted(quiz.questions, key=lambda q: q.order_index)
+            total = len(ordered_questions)
 
-            for qq in quiz.questions:
+            for qq in ordered_questions:
                 given = str(answers.get(qq.id) or "").strip()
                 expected = qq.correct_answer.strip()
-                if given.lower() == expected.lower():
+                is_ok = given.lower() == expected.lower()
+                if is_ok:
                     correct += 1
                 else:
                     wrong_q_ids.append(qq.id)
@@ -177,6 +181,17 @@ class AdaptiveLearningService:
                     topic_label = raw_topic.rstrip("?").strip() or course.title
                     if topic_label and topic_label not in wrong_topics:
                         wrong_topics.append(topic_label)
+                question_feedback.append(
+                    CourseQuizQuestionFeedback(
+                        question_id=qq.id,
+                        question_text=qq.question_text,
+                        user_answer=given,
+                        is_correct=is_ok,
+                        correct_answer=expected,
+                        explanation=qq.explanation or "",
+                        source_section=qq.source_section or "",
+                    )
+                )
 
             pct = round((correct / total) * 100.0, 2) if total > 0 else 0.0
             passed = pct >= float(quiz.passing_score)
@@ -214,6 +229,7 @@ class AdaptiveLearningService:
             percentage=pct,
             passed=passed,
             wrong_topics=wrong_topics,
+            question_feedback=question_feedback,
             gaps_updated=len(updated_gaps),
             completed_at=now,
         )

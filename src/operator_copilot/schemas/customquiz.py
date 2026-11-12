@@ -255,6 +255,16 @@ class LearningMetricsResponse(BaseModel):
     per_topic_evolution: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class CourseQuizQuestionFeedback(BaseModel):
+    question_id: str
+    question_text: str
+    user_answer: str
+    is_correct: bool
+    correct_answer: str
+    explanation: str = ""
+    source_section: str = ""
+
+
 class CourseQuizSubmitResponse(BaseModel):
     attempt_id: str
     quiz_id: str
@@ -265,5 +275,6 @@ class CourseQuizSubmitResponse(BaseModel):
     percentage: float
     passed: bool
     wrong_topics: list[str] = Field(default_factory=list)
+    question_feedback: list[CourseQuizQuestionFeedback] = Field(default_factory=list)
     gaps_updated: int = 0
     completed_at: datetime

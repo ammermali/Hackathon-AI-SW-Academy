@@ -201,6 +201,16 @@ export interface UserLearningOverview {
   custom_quiz_attempts: CustomQuizAttemptSummary[];
 }
 
+export interface CourseQuizQuestionFeedback {
+  question_id: string;
+  question_text: string;
+  user_answer: string;
+  is_correct: boolean;
+  correct_answer: string;
+  explanation: string;
+  source_section: string;
+}
+
 export interface CourseQuizSubmitResponse {
   attempt_id: string;
   quiz_id: string;
@@ -211,6 +221,7 @@ export interface CourseQuizSubmitResponse {
   percentage: number;
   passed: boolean;
   wrong_topics: string[];
+  question_feedback?: CourseQuizQuestionFeedback[];
   gaps_updated: number;
   completed_at: string;
 }
